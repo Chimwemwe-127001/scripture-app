@@ -1,9 +1,14 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const { join } = require('path')
 const { spawn } = require('child_process')
+const chunker   = require('./chunker')
+const llmClient = require('./llmClient')
+const bibleDb   = require('./bibleDb')
 
 let mainWindow = null
 let whisperProcess = null
+// Deduplicate suggestions per listening session
+let sentRefs = new Set()
 
 // ---------------------------------------------------------------------------
 // Python helpers
@@ -39,7 +44,24 @@ function killWhisper() {
     whisperProcess.kill()
     whisperProcess = null
   }
+  chunker.stop()
 }
+
+// ---------------------------------------------------------------------------
+// Chunker → LLM → Bible DB pipeline
+// ---------------------------------------------------------------------------
+
+chunker.on('chunk', async (text) => {
+  const refs = await llmClient.queryScriptures(text)
+  for (const ref of refs) {
+    if (!ref.reference) continue
+    if (sentRefs.has(ref.reference)) continue
+    const card = await bibleDb.lookupVerse(ref)
+    if (!card) continue
+    sentRefs.add(ref.reference)
+    mainWindow?.webContents.send('scripture-suggestion', card)
+  }
+})
 
 // ---------------------------------------------------------------------------
 // IPC handlers
@@ -51,6 +73,8 @@ ipcMain.handle('get-audio-devices', async () => {
 
 ipcMain.handle('start-listening', async (_e, { model = 'small', deviceIndex = null } = {}) => {
   killWhisper()
+  sentRefs = new Set()
+  chunker.start()
 
   const args = [join(pythonDir(), 'whisper_worker.py'), '--model', model]
   if (deviceIndex !== null && deviceIndex !== undefined) {
@@ -67,6 +91,7 @@ ipcMain.handle('start-listening', async (_e, { model = 'small', deviceIndex = nu
         switch (msg.type) {
           case 'transcript':
             mainWindow?.webContents.send('transcript-update', msg)
+            chunker.addText(msg.text)
             break
           case 'status':
             mainWindow?.webContents.send('listening-status', msg)
@@ -95,9 +120,12 @@ ipcMain.handle('start-listening', async (_e, { model = 'small', deviceIndex = nu
       message: `Failed to start Python: ${err.message}. Is Python installed?`
     })
     whisperProcess = null
+    chunker.stop()
   })
 
   whisperProcess.on('exit', () => {
+    chunker.flush()
+    chunker.stop()
     whisperProcess = null
     mainWindow?.webContents.send('listening-status', { listening: false, message: 'Stopped.' })
   })
@@ -106,8 +134,22 @@ ipcMain.handle('start-listening', async (_e, { model = 'small', deviceIndex = nu
 })
 
 ipcMain.handle('stop-listening', async () => {
+  chunker.flush()
   killWhisper()
   return { stopped: true }
+})
+
+ipcMain.handle('check-llm-status', async () => {
+  return llmClient.checkStatus()
+})
+
+ipcMain.handle('set-llm-endpoint', async (_e, url) => {
+  llmClient.setEndpoint(url)
+  return llmClient.checkStatus()
+})
+
+ipcMain.handle('check-bible-db', async () => {
+  return { ready: bibleDb.isDbReady() }
 })
 
 // ---------------------------------------------------------------------------
