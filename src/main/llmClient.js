@@ -61,6 +61,7 @@ class LlmClient {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          model: 'local-model',   // LM Studio requires this field; uses whatever is loaded
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user',   content: text.trim() },
