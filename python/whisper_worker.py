@@ -64,20 +64,23 @@ def load_sounddevice():
 
 def main():
     parser = argparse.ArgumentParser(description="Whisper real-time transcription worker")
-    parser.add_argument("--model",        default="small",
+    parser.add_argument("--model",         default="small",
                         choices=["tiny", "base", "small", "medium", "large-v3"])
-    parser.add_argument("--device-index", type=int,   default=None,
+    parser.add_argument("--device-index",  type=int,   default=None,
                         help="sounddevice input device index (omit for system default)")
-    parser.add_argument("--sample-rate",  type=int,   default=16000)
-    parser.add_argument("--chunk-secs",   type=float, default=5.0,
+    parser.add_argument("--sample-rate",   type=int,   default=16000)
+    parser.add_argument("--chunk-secs",    type=float, default=6.0,
                         help="Audio window fed to Whisper (seconds)")
-    parser.add_argument("--overlap-secs", type=float, default=1.5,
+    parser.add_argument("--overlap-secs",  type=float, default=1.5,
                         help="Overlap kept after each chunk (seconds)")
+    parser.add_argument("--vad-threshold", type=float, default=0.015,
+                        help="RMS energy gate — chunks quieter than this are skipped (0 = disable)")
     args = parser.parse_args()
 
     RATE          = args.sample_rate
     CHUNK_SAMPLES = int(RATE * args.chunk_secs)
-    KEEP_SAMPLES  = int(RATE * args.overlap_secs)   # tail kept for overlap
+    KEEP_SAMPLES  = int(RATE * args.overlap_secs)
+    VAD_RMS       = args.vad_threshold
 
     model = load_whisper(args.model)
     sd    = load_sounddevice()
@@ -109,16 +112,41 @@ def main():
             audio_window = buffer[:CHUNK_SAMPLES].copy()
             buffer       = buffer[CHUNK_SAMPLES - KEEP_SAMPLES:]   # rolling overlap
 
+            # --- Energy gate: skip silent/near-silent windows to prevent
+            #     Whisper from hallucinating on background noise / silence.
+            if VAD_RMS > 0:
+                rms = float(np.sqrt(np.mean(audio_window ** 2)))
+                if rms < VAD_RMS:
+                    continue
+
             try:
                 result = model.transcribe(
                     audio_window,
                     fp16=False,
                     language="en",
-                    condition_on_previous_text=False,
+                    task="transcribe",
+                    temperature=0,                   # deterministic; no sampling
+                    condition_on_previous_text=False, # prevent hallucination cascades
+                    no_speech_threshold=0.6,          # Whisper's built-in silence gate
+                    logprob_threshold=-1.0,           # drop low-confidence segments
+                    compression_ratio_threshold=2.4,  # drop repetitive/looping output
                 )
-                text = result.get("text", "").strip()
+
+                # Filter at segment level using Whisper's own confidence scores.
+                # result["text"] includes ALL segments; we only want ones where
+                # Whisper is confident it heard real speech.
+                segments = result.get("segments", [])
+                good_parts = [
+                    seg["text"].strip()
+                    for seg in segments
+                    if seg.get("no_speech_prob", 1.0) < 0.5        # likely speech
+                    and seg.get("avg_logprob", -999)  > -1.0        # confident words
+                ]
+                text = " ".join(good_parts).strip()
+
                 if text and len(text) > 3:
                     emit({"type": "transcript", "text": text, "is_final": True})
+
             except Exception as exc:
                 emit({"type": "warning", "message": f"Transcription error: {exc}"})
 
