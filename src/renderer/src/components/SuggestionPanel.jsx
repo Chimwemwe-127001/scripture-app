@@ -1,6 +1,11 @@
 import ScriptureCard from './ScriptureCard'
 
-export default function SuggestionPanel({ suggestions, onSelect }) {
+export default function SuggestionPanel({ suggestions, onSelect, bibleDbReady, llmStatus }) {
+  // Build contextual hints for the empty state
+  const hints = []
+  if (bibleDbReady === false) hints.push({ icon: '📖', msg: 'Bible DB not set up — run npm run setup-bible' })
+  if (llmStatus && !llmStatus.ok) hints.push({ icon: '🤖', msg: 'LM Studio not connected — start it and load Mistral 7B' })
+
   return (
     <div className="flex flex-col flex-1 bg-surface rounded-lg overflow-hidden border border-surface-3">
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-3 shrink-0">
@@ -29,6 +34,16 @@ export default function SuggestionPanel({ suggestions, onSelect }) {
               <p className="text-sm font-medium opacity-40">Waiting for scripture matches…</p>
               <p className="text-xs opacity-30 mt-1">Suggestions appear as the pastor speaks</p>
             </div>
+            {hints.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1.5 w-full max-w-xs">
+                {hints.map((h, i) => (
+                  <div key={i} className="flex items-start gap-2 text-left bg-surface-2 border border-surface-3 rounded px-2.5 py-2">
+                    <span className="text-base leading-none mt-0.5">{h.icon}</span>
+                    <span className="text-xs text-surface-4 leading-snug">{h.msg}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           suggestions.map(s => (
@@ -40,6 +55,10 @@ export default function SuggestionPanel({ suggestions, onSelect }) {
       <div className="px-3 py-1.5 border-t border-surface-3 shrink-0">
         <span className="text-xs text-surface-4">
           Click a card to add it to the <span className="text-white">selected queue</span>
+          {' · '}
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">Ctrl+L</kbd> listen
+          {' · '}
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">Esc</kbd> clear
         </span>
       </div>
     </div>

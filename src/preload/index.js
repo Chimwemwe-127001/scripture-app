@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Bible DB status
   checkBibleDb: () => ipcRenderer.invoke('check-bible-db'),
 
+  // Clipboard
+  copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
+
   // Incoming events from main process
   onTranscript:          (cb) => ipcRenderer.on('transcript-update',    (_e, d) => cb(d)),
   onListeningStatus:     (cb) => ipcRenderer.on('listening-status',     (_e, d) => cb(d)),
