@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
 
-export default function TranscriptPanel({ words }) {
+export default function TranscriptPanel({ segments, isListening }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [words])
+  }, [segments])
 
-  const text = words.join(' ')
+  const wordCount = segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0)
 
   return (
     <div className="flex flex-col w-64 shrink-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
@@ -20,7 +20,7 @@ export default function TranscriptPanel({ words }) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
-        {words.length === 0 ? (
+        {segments.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center gap-2 text-surface-4">
             <svg className="w-8 h-8 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -29,17 +29,24 @@ export default function TranscriptPanel({ words }) {
             <p className="text-xs opacity-50">Waiting for audio input…</p>
           </div>
         ) : (
-          <p className="text-sm text-slate-200 leading-relaxed">
-            {text}
-            <span className="inline-block w-2 h-3 ml-0.5 bg-brand-light rounded-sm animate-pulse align-middle" />
-          </p>
+          <div className="text-sm text-slate-200 leading-relaxed space-y-1">
+            {segments.map((seg, i) => (
+              <span key={seg.id}>
+                {seg.text}
+                {i < segments.length - 1 ? ' ' : ''}
+              </span>
+            ))}
+            {isListening && (
+              <span className="inline-block w-2 h-3 ml-0.5 bg-brand-light rounded-sm animate-pulse align-middle" />
+            )}
+          </div>
         )}
         <div ref={bottomRef} />
       </div>
 
       <div className="px-3 py-1.5 border-t border-surface-3 shrink-0">
         <span className="text-xs text-surface-4">
-          {words.length} <span className="opacity-60">words</span>
+          {wordCount} <span className="opacity-60">words</span>
         </span>
       </div>
     </div>
