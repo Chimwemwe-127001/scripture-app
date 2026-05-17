@@ -11,7 +11,7 @@ const { join } = require('path')
 const { writeFileSync, mkdirSync } = require('fs')
 
 const KJV_URL =
-  'https://raw.githubusercontent.com/scrollmapper/bible_databases/master/json/t_kjv.json'
+  'https://raw.githubusercontent.com/scrollmapper/bible_databases/master/formats/csv/KJV.csv'
 
 const BOOK_NAMES = [
   '',           // 0 padding
@@ -30,28 +30,90 @@ const BOOK_NAMES = [
   '2 Peter','1 John','2 John','3 John','Jude','Revelation',
 ]
 
+// Build reverse map: book name → id
+const BOOK_ID = {}
+BOOK_NAMES.forEach((name, i) => { if (name) BOOK_ID[name.toLowerCase()] = i })
+
+// The scrollmapper CSV uses Roman numerals and long Revelation title — add aliases
+const CSV_ALIASES = {
+  'i samuel': '1 samuel',     'ii samuel': '2 samuel',
+  'i kings': '1 kings',       'ii kings': '2 kings',
+  'i chronicles': '1 chronicles', 'ii chronicles': '2 chronicles',
+  'i corinthians': '1 corinthians', 'ii corinthians': '2 corinthians',
+  'i thessalonians': '1 thessalonians', 'ii thessalonians': '2 thessalonians',
+  'i timothy': '1 timothy',   'ii timothy': '2 timothy',
+  'i peter': '1 peter',       'ii peter': '2 peter',
+  'i john': '1 john',         'ii john': '2 john',
+  'iii john': '3 john',       'revelation of john': 'revelation',
+}
+for (const [alias, canonical] of Object.entries(CSV_ALIASES)) {
+  if (BOOK_ID[canonical] !== undefined) BOOK_ID[alias] = BOOK_ID[canonical]
+}
+
+// Proper RFC-4180 CSV parser — handles multi-line quoted fields
+// Returns array of rows (each row is an array of field strings)
+function parseCsv(text) {
+  const rows = []
+  let pos = 0
+  const len = text.length
+
+  // Skip header line
+  while (pos < len && text[pos] !== '\n') pos++
+  if (pos < len) pos++ // consume \n
+
+  while (pos < len) {
+    const fields = []
+    // Parse one row
+    while (true) {
+      let field = ''
+      if (text[pos] === '"') {
+        // Quoted field
+        pos++ // skip opening "
+        while (pos < len) {
+          if (text[pos] === '"') {
+            if (text[pos + 1] === '"') { field += '"'; pos += 2 } // escaped quote
+            else { pos++; break }                                  // closing quote
+          } else {
+            field += text[pos++]
+          }
+        }
+      } else {
+        // Unquoted field — read until comma or newline
+        while (pos < len && text[pos] !== ',' && text[pos] !== '\r' && text[pos] !== '\n') {
+          field += text[pos++]
+        }
+      }
+      fields.push(field)
+
+      if (pos >= len || text[pos] === '\r' || text[pos] === '\n') {
+        if (pos < len && text[pos] === '\r') pos++ // skip \r
+        if (pos < len && text[pos] === '\n') pos++ // skip \n
+        break // end of row
+      }
+      pos++ // skip comma, continue to next field
+    }
+    if (fields.length >= 4 && fields[0]) rows.push(fields)
+  }
+  return rows
+}
+
 async function main() {
   console.log('Downloading KJV Bible data from scrollmapper/bible_databases …')
   console.log(KJV_URL)
 
-  let data
+  let csvText
   try {
     const res = await fetch(KJV_URL)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    data = await res.json()
+    csvText = await res.text()
   } catch (err) {
     console.error('\nFailed to download Bible data:', err.message)
     console.error('Check your internet connection and try again.')
     process.exit(1)
   }
 
-  const rows = data?.resultset?.row
-  if (!rows || !Array.isArray(rows)) {
-    console.error('Unexpected JSON format.')
-    process.exit(1)
-  }
-
-  console.log(`Parsing ${rows.length} verses …`)
+  const rows = parseCsv(csvText)
+  console.log(`Parsing ${rows.length} rows …`)
 
   const initSqlJs = require('sql.js')
   const wasmPath  = require.resolve('sql.js/dist/sql-wasm.wasm')
@@ -76,11 +138,10 @@ async function main() {
   )
 
   let count = 0
-  for (const row of rows) {
-    const [, bookId, chapter, verse, text] = row.field
-    const bookName = BOOK_NAMES[bookId]
-    if (!bookName) continue
-    stmt.run([bookId, bookName, chapter, verse, text, 'KJV'])
+  for (const [bookName, chapter, verse, text] of rows) {
+    const bookId = BOOK_ID[bookName?.toLowerCase()]
+    if (!bookId || !text) continue
+    stmt.run([bookId, BOOK_NAMES[bookId], parseInt(chapter), parseInt(verse), text, 'KJV'])
     count++
   }
   stmt.free()
