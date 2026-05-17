@@ -5,6 +5,7 @@
 
 const { join }       = require('path')
 const { readFileSync, existsSync } = require('fs')
+const { app }        = require('electron')
 
 let _db   = null
 let _SQL  = null
@@ -93,7 +94,18 @@ function normaliseBook(raw) {
 // Initialise DB
 // ---------------------------------------------------------------------------
 function getDbPath() {
-  return join(__dirname, '../../bible-data/kjv.db')
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'bible-data', 'kjv.db')
+  }
+  return join(__dirname, '..', '..', 'bible-data', 'kjv.db')
+}
+
+function getWasmPath() {
+  if (app.isPackaged) {
+    // sql.js is asarUnpacked so it lands at app.asar.unpacked/node_modules/...
+    return join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm')
+  }
+  return require.resolve('sql.js/dist/sql-wasm.wasm')
 }
 
 async function initDb() {
@@ -106,8 +118,7 @@ async function initDb() {
 
   if (!_SQL) {
     const initSqlJs = require('sql.js')
-    const wasmPath  = require.resolve('sql.js/dist/sql-wasm.wasm')
-    const wasmBinary = readFileSync(wasmPath)
+    const wasmBinary = readFileSync(getWasmPath())
     _SQL = await initSqlJs({ wasmBinary })
   }
 

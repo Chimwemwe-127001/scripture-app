@@ -1,6 +1,6 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, clipboard } = require('electron')
 const { join } = require('path')
-const { spawn } = require('child_process')
+const { spawn, execFile } = require('child_process')
 const chunker   = require('./chunker')
 const llmClient = require('./llmClient')
 const bibleDb   = require('./bibleDb')
@@ -139,6 +139,11 @@ ipcMain.handle('stop-listening', async () => {
   return { stopped: true }
 })
 
+ipcMain.handle('copy-to-clipboard', (_e, text) => {
+  clipboard.writeText(text)
+  return { ok: true }
+})
+
 ipcMain.handle('check-llm-status', async () => {
   return llmClient.checkStatus()
 })
@@ -173,7 +178,18 @@ function createWindow() {
     }
   })
 
-  mainWindow.on('ready-to-show', () => mainWindow.show())
+  mainWindow.on('ready-to-show', () => {
+    mainWindow.show()
+    // Non-blocking Python availability check
+    execFile(pythonCmd(), ['--version'], { timeout: 4000 }, (err) => {
+      if (err) {
+        mainWindow?.webContents.send('listening-error', {
+          type: 'warning',
+          message: 'Python not found. Whisper transcription requires Python 3.9+. Run python\\setup.bat to install.'
+        })
+      }
+    })
+  })
   mainWindow.on('closed', () => { killWhisper(); mainWindow = null })
 
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {

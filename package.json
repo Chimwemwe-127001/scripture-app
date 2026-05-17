@@ -7,7 +7,9 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "setup-bible": "node scripts/setup-bible-db.js"
+    "setup-bible": "node scripts/setup-bible-db.js",
+    "dist": "electron-vite build && electron-builder",
+    "dist:win": "electron-vite build && electron-builder --win"
   },
   "repository": {
     "type": "git",
@@ -21,11 +23,42 @@
     "url": "https://github.com/Chimwemwe-127001/scripture-app/issues"
   },
   "homepage": "https://github.com/Chimwemwe-127001/scripture-app#readme",
+  "build": {
+    "appId": "com.col.scripture-app",
+    "productName": "Scripture Suggestion Panel",
+    "copyright": "Copyright © 2025",
+    "asar": true,
+    "asarUnpack": ["**/node_modules/sql.js/dist/**"],
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "resources"
+    },
+    "files": [
+      "out/**/*",
+      "package.json",
+      "!**/python/**",
+      "!**/bible-data/**"
+    ],
+    "extraResources": [
+      { "from": "python/", "to": "python/" },
+      { "from": "bible-data/", "to": "bible-data/", "filter": ["**/*.db"] }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "shortcutName": "Scripture Panel",
+      "deleteAppDataOnUninstall": false
+    }
+  },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.0",
     "electron": "^42.1.0",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^4.3.0",

@@ -140,6 +140,41 @@ export default function App() {
   }, [demoMode])
 
   // ------------------------------------------------------------------
+  // Keyboard shortcuts: Ctrl+L = toggle listen, Esc = clear suggestions,
+  // Ctrl+D = toggle demo mode
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.ctrlKey && e.key === 'l') {
+        e.preventDefault()
+        if (isListening) handleStopListening()
+        else handleStartListening()
+      } else if (e.key === 'Escape') {
+        setSuggestions([])
+      } else if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault()
+        if (!demoMode) { setDemoMode(true) }
+        else { stopDemoTimers(); setIsListening(false); setDemoMode(false); setSegments([]) }
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [isListening, demoMode])
+
+  // ------------------------------------------------------------------
+  // LLM auto-retry: poll every 30s when LLM is disconnected
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!api || llmStatus?.ok) return
+    const id = setInterval(async () => {
+      const r = await api.checkLlmStatus()
+      setLlmStatus(r)
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [llmStatus?.ok])
+
+  // ------------------------------------------------------------------
   // LLM endpoint change
   // ------------------------------------------------------------------
   async function handleEndpointChange(url) {
@@ -196,7 +231,8 @@ export default function App() {
       )}
       <div className="flex flex-1 overflow-hidden gap-2 p-2">
         <TranscriptPanel segments={segments} isListening={isListening} />
-        <SuggestionPanel suggestions={suggestions} onSelect={handleSelect} />
+        <SuggestionPanel suggestions={suggestions} onSelect={handleSelect}
+          bibleDbReady={bibleDbReady} llmStatus={llmStatus} />
         <SelectedQueue queue={selectedQueue} onRemove={handleRemove} />
       </div>
     </div>
