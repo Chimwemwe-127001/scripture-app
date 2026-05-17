@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "setup-bible": "node scripts/setup-bible-db.js"
   },
   "repository": {
     "type": "git",
@@ -32,6 +33,7 @@
   },
   "dependencies": {
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "sql.js": "^1.14.1"
   }
 }

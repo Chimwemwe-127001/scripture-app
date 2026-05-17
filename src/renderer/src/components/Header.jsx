@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 const MODELS = [
   { value: 'tiny',     label: 'tiny (~75 MB)' },
@@ -13,11 +13,15 @@ const api = window.electronAPI
 export default function Header({
   isListening, statusMsg, errorMsg, demoMode,
   whisperModel, deviceIndex,
-  onModelChange, onDeviceChange,
+  llmStatus, llmEndpoint, bibleDbReady,
+  onModelChange, onDeviceChange, onEndpointChange,
   onToggleListen, onToggleDemo,
 }) {
   const [devices, setDevices] = useState([])
   const [loadingDevices, setLoadingDevices] = useState(false)
+  const [endpointInput, setEndpointInput] = useState(llmEndpoint || 'http://localhost:1234/v1')
+  const [showEndpoint, setShowEndpoint] = useState(false)
+  const endpointRef = useRef(null)
 
   useEffect(() => {
     if (!api) return
@@ -27,6 +31,22 @@ export default function Header({
       setLoadingDevices(false)
     })
   }, [])
+
+  function handleEndpointSubmit(e) {
+    e.preventDefault()
+    onEndpointChange?.(endpointInput.trim())
+    setShowEndpoint(false)
+  }
+
+  const llmOk = llmStatus?.ok === true
+  const llmDot = llmStatus === null
+    ? 'bg-surface-4'
+    : llmOk ? 'bg-green-400' : 'bg-red-500'
+  const llmTip = llmStatus === null
+    ? 'LM Studio: checking…'
+    : llmOk
+      ? `LM Studio: connected${llmStatus.model ? ` (${llmStatus.model})` : ''}`
+      : `LM Studio: not connected — ${llmStatus.error || 'unreachable'}`
 
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-surface-2 border-b border-surface-3 shrink-0 gap-4 flex-wrap">
@@ -74,6 +94,56 @@ export default function Header({
               ))}
             </select>
           </label>
+        )}
+
+        {/* LM Studio endpoint + status */}
+        {api && (
+          <div className="flex items-center gap-1.5 relative">
+            <button
+              title={llmTip}
+              onClick={() => setShowEndpoint(v => !v)}
+              className="flex items-center gap-1 text-xs text-surface-4 hover:text-white transition-colors"
+            >
+              <span className={`w-2 h-2 rounded-full ${llmDot} transition-colors`} />
+              <span>LM Studio</span>
+            </button>
+            {showEndpoint && (
+              <form
+                onSubmit={handleEndpointSubmit}
+                className="absolute top-7 left-0 z-50 bg-surface-2 border border-surface-3 rounded shadow-lg p-2 flex gap-2 items-center min-w-[320px]"
+              >
+                <input
+                  ref={endpointRef}
+                  autoFocus
+                  type="text"
+                  value={endpointInput}
+                  onChange={e => setEndpointInput(e.target.value)}
+                  placeholder="http://localhost:1234/v1"
+                  className="flex-1 bg-surface-3 border border-surface-3 text-white text-xs rounded px-2 py-1 focus:outline-none focus:border-brand"
+                />
+                <button
+                  type="submit"
+                  className="bg-brand hover:bg-brand-light text-white text-xs px-2 py-1 rounded"
+                >
+                  Save
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* Bible DB status badge */}
+        {api && (
+          <span
+            title={bibleDbReady ? 'KJV Bible database loaded' : 'Bible DB missing — run: node scripts/setup-bible-db.js'}
+            className={`text-xs px-2 py-0.5 rounded border ${
+              bibleDbReady
+                ? 'border-green-700 text-green-400 bg-green-900/20'
+                : 'border-amber-700 text-amber-400 bg-amber-900/20'
+            }`}
+          >
+            {bibleDbReady ? '📖 KJV' : '⚠ No Bible DB'}
+          </span>
         )}
 
         {/* Demo mode toggle */}

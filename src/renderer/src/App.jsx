@@ -16,6 +16,11 @@ export default function App() {
   const [errorMsg, setErrorMsg]         = useState('')
   const [demoMode, setDemoMode]         = useState(!api)  // auto-demo when no Electron API
 
+  // LLM (LM Studio) status
+  const [llmStatus, setLlmStatus]       = useState(null)   // { ok, model, error }
+  const [llmEndpoint, setLlmEndpoint]   = useState('http://localhost:1234/v1')
+  const [bibleDbReady, setBibleDbReady] = useState(false)
+
   // Selected whisper model + audio device (controlled from Header)
   const [whisperModel, setWhisperModel]   = useState('small')
   const [deviceIndex, setDeviceIndex]     = useState(null)
@@ -23,6 +28,15 @@ export default function App() {
   const scriptureIdxRef = useRef(0)
   const demoWordIdxRef  = useRef(0)
   const demoTimersRef   = useRef([])
+
+  // ------------------------------------------------------------------
+  // Check LLM + Bible DB status on mount (real Electron only)
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!api) return
+    api.checkBibleDb().then(r => setBibleDbReady(r.ready))
+    api.checkLlmStatus().then(r => setLlmStatus(r))
+  }, [])
 
   // ------------------------------------------------------------------
   // Demo mode — simulates transcript + suggestions with mock data
@@ -83,6 +97,7 @@ export default function App() {
   async function handleStartListening() {
     if (!api) { startDemoMode(); return }
     setErrorMsg('')
+    setSuggestions([])
     setStatusMsg('Starting Whisper…')
     await api.startListening({ model: whisperModel, deviceIndex })
   }
@@ -107,9 +122,12 @@ export default function App() {
       setErrorMsg(msg.message || 'Unknown error')
       setIsListening(false)
     })
+    api.onScriptureSuggestion((card) => {
+      setSuggestions(prev => [card, ...prev])
+    })
 
     return () => {
-      ['transcript-update', 'listening-status', 'listening-error'].forEach(
+      ['transcript-update', 'listening-status', 'listening-error', 'scripture-suggestion'].forEach(
         ch => api.removeAllListeners(ch)
       )
     }
@@ -120,6 +138,16 @@ export default function App() {
     if (demoMode) startDemoMode()
     return stopDemoTimers
   }, [demoMode])
+
+  // ------------------------------------------------------------------
+  // LLM endpoint change
+  // ------------------------------------------------------------------
+  async function handleEndpointChange(url) {
+    setLlmEndpoint(url)
+    if (!api) return
+    const status = await api.setLlmEndpoint(url)
+    setLlmStatus(status)
+  }
 
   // ------------------------------------------------------------------
   // Selected queue actions
@@ -148,8 +176,12 @@ export default function App() {
         demoMode={demoMode}
         whisperModel={whisperModel}
         deviceIndex={deviceIndex}
+        llmStatus={llmStatus}
+        llmEndpoint={llmEndpoint}
+        bibleDbReady={bibleDbReady}
         onModelChange={setWhisperModel}
         onDeviceChange={setDeviceIndex}
+        onEndpointChange={handleEndpointChange}
         onToggleListen={isListening ? handleStopListening : handleStartListening}
         onToggleDemo={() => {
           if (!demoMode) { setDemoMode(true) }
