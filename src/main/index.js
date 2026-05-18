@@ -53,6 +53,10 @@ function killWhisper() {
 
 chunker.on('chunk', async (text) => {
   const refs = await llmClient.queryScriptures(text)
+  const llmErr = llmClient.getLastError()
+  if (llmErr) {
+    mainWindow?.webContents.send('llm-error', { message: llmErr })
+  }
   for (const ref of refs) {
     if (!ref.reference) continue
     if (sentRefs.has(ref.reference)) continue

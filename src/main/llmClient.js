@@ -55,43 +55,82 @@ class LlmClient {
   async queryScriptures(text) {
     if (!text?.trim()) return []
 
-    let res
-    try {
-      res = await fetch(`${this.endpoint}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'local-model',   // LM Studio requires this field; uses whatever is loaded
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user',   content: text.trim() },
-          ],
-          temperature: 0.1,
-          max_tokens: 512,
-          stream: false,
-        }),
-        signal: AbortSignal.timeout(20000),
-      })
-    } catch (err) {
-      console.error('[LLM] fetch error:', err.message)
-      return []
+    const MAX_RETRIES = 2
+    const RETRY_DELAY_MS = 2000
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS))
+        console.warn(`[LLM] Retrying (attempt ${attempt}/${MAX_RETRIES})…`)
+      }
+
+      let res
+      try {
+        res = await fetch(`${this.endpoint}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'local-model',
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user',   content: text.trim() },
+            ],
+            temperature: 0.1,
+            max_tokens: 512,
+            stream: false,
+          }),
+          signal: AbortSignal.timeout(25000),
+        })
+      } catch (err) {
+        console.error(`[LLM] fetch error (attempt ${attempt}):`, err.message)
+        if (attempt === MAX_RETRIES) {
+          this._lastError = err.message
+          return []
+        }
+        continue
+      }
+
+      if (!res.ok) {
+        let errBody = ''
+        try { errBody = await res.text() } catch { /* ignore */ }
+        console.error(`[LLM] HTTP ${res.status} (attempt ${attempt}):`, errBody.slice(0, 200))
+        if (attempt === MAX_RETRIES) {
+          this._lastError = `HTTP ${res.status} — ${errBody.slice(0, 100)}`
+          return []
+        }
+        continue
+      }
+
+      let json
+      try {
+        json = await res.json()
+      } catch (err) {
+        console.error('[LLM] JSON parse error:', err.message)
+        this._lastError = 'Bad JSON from LM Studio'
+        return []
+      }
+
+      // LM Studio sometimes returns 200 but with an error field (Channel Error)
+      if (json?.error) {
+        const msg = typeof json.error === 'string' ? json.error : JSON.stringify(json.error)
+        console.error(`[LLM] model error (attempt ${attempt}):`, msg)
+        if (attempt === MAX_RETRIES) {
+          this._lastError = `LM Studio: ${msg}`
+          return []
+        }
+        continue
+      }
+
+      this._lastError = null
+      const raw = json?.choices?.[0]?.message?.content ?? ''
+      return this._parseResponse(raw)
     }
 
-    if (!res.ok) {
-      console.error('[LLM] HTTP error:', res.status)
-      return []
-    }
+    return []
+  }
 
-    let json
-    try {
-      json = await res.json()
-    } catch (err) {
-      console.error('[LLM] JSON parse error:', err.message)
-      return []
-    }
-
-    const raw = json?.choices?.[0]?.message?.content ?? ''
-    return this._parseResponse(raw)
+  getLastError() {
+    return this._lastError ?? null
   }
 
   // -------------------------------------------------------------------------
