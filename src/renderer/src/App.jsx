@@ -156,9 +156,12 @@ export default function App() {
         return next.slice(0, SUGGESTION_MAX)
       })
     })
+    api.onLlmError?.((data) => {
+      setErrorMsg(`LM Studio error: ${data.message || 'Channel Error — try reloading the model in LM Studio'}`)
+    })
 
     return () => {
-      ['transcript-update', 'listening-status', 'listening-error', 'scripture-suggestion'].forEach(
+      ['transcript-update', 'listening-status', 'listening-error', 'scripture-suggestion', 'llm-error'].forEach(
         ch => api.removeAllListeners(ch)
       )
     }

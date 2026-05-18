@@ -1,9 +1,10 @@
 const { app, BrowserWindow, ipcMain, clipboard } = require('electron')
 const { join } = require('path')
 const { spawn, execFile } = require('child_process')
-const chunker   = require('./chunker')
-const llmClient = require('./llmClient')
-const bibleDb   = require('./bibleDb')
+const chunker        = require('./chunker')
+const llmClient      = require('./llmClient')
+const bibleDb        = require('./bibleDb')
+const bibleExtractor = require('./bibleExtractor')
 
 let mainWindow = null
 let whisperProcess = null
@@ -52,8 +53,27 @@ function killWhisper() {
 // ---------------------------------------------------------------------------
 
 chunker.on('chunk', async (text) => {
-  const refs = await llmClient.queryScriptures(text)
-  for (const ref of refs) {
+  // 1. Regex extraction — always runs, catches explicit references instantly
+  const regexRefs = bibleExtractor.extract(text)
+
+  // 2. LLM extraction — catches paraphrases/allusions when LM Studio is available
+  const llmRefs   = await llmClient.queryScriptures(text)
+  const llmErr    = llmClient.getLastError()
+  if (llmErr) {
+    mainWindow?.webContents.send('llm-error', { message: llmErr })
+  }
+
+  // Merge: LLM results first (higher confidence for paraphrases), then regex fills gaps
+  const allRefs = [...llmRefs]
+  const seen    = new Set(llmRefs.map(r => r.reference))
+  for (const r of regexRefs) {
+    if (!seen.has(r.reference)) {
+      seen.add(r.reference)
+      allRefs.push(r)
+    }
+  }
+
+  for (const ref of allRefs) {
     if (!ref.reference) continue
     if (sentRefs.has(ref.reference)) continue
     const card = await bibleDb.lookupVerse(ref)

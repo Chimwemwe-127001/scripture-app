@@ -44,8 +44,11 @@
       { "from": "bible-data/", "to": "bible-data/", "filter": ["**/*.db"] }
     ],
     "win": {
-      "target": "nsis",
-      "icon": "resources/icon.ico"
+      "target": [
+        { "target": "zip", "arch": ["x64"] }
+      ],
+      "icon": "resources/icon.ico",
+      "forceCodeSigning": false
     },
     "nsis": {
       "oneClick": true,
