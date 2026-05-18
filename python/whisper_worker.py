@@ -69,9 +69,9 @@ def main():
     parser.add_argument("--device-index",  type=int,   default=None,
                         help="sounddevice input device index (omit for system default)")
     parser.add_argument("--sample-rate",   type=int,   default=16000)
-    parser.add_argument("--chunk-secs",    type=float, default=4.0,
+    parser.add_argument("--chunk-secs",    type=float, default=2.0,
                         help="Audio window fed to Whisper (seconds)")
-    parser.add_argument("--overlap-secs",  type=float, default=1.0,
+    parser.add_argument("--overlap-secs",  type=float, default=0.5,
                         help="Overlap kept after each chunk (seconds)")
     parser.add_argument("--vad-threshold", type=float, default=0.004,
                         help="RMS energy gate — chunks quieter than this are skipped (0 = disable)")

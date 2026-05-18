@@ -10,8 +10,8 @@
 
 const { EventEmitter } = require('events')
 
-const INTERVAL_MS  = 9_000
-const MIN_WORDS    = 15
+const INTERVAL_MS  = 5_000
+const MIN_WORDS    = 8
 const MAX_WORDS    = 80
 const OVERLAP_WORDS = 20
 

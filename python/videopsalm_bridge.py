@@ -110,6 +110,32 @@ if __name__ == "__main__":
         print(json.dumps({"running": is_running()}), flush=True)
         sys.exit(0)
 
+    if len(sys.argv) >= 2 and sys.argv[1] == "--daemon":
+        # Persistent daemon: read JSON commands from stdin, write results to stdout.
+        # Commands: {"action":"check"} or {"action":"send","reference":"John 3:16"}
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                cmd = json.loads(line)
+            except json.JSONDecodeError:
+                print(json.dumps({"ok": False, "error": "Bad JSON"}), flush=True)
+                continue
+            action = cmd.get("action")
+            if action == "check":
+                print(json.dumps({"running": is_running()}), flush=True)
+            elif action == "send":
+                ref = cmd.get("reference", "")
+                ok, error = send_reference(ref)
+                result = {"ok": ok}
+                if error:
+                    result["error"] = error
+                print(json.dumps(result), flush=True)
+            else:
+                print(json.dumps({"ok": False, "error": f"Unknown action: {action}"}), flush=True)
+        sys.exit(0)
+
     if len(sys.argv) < 2:
         print(json.dumps({"ok": False, "error": "Usage: videopsalm_bridge.py <reference>"}))
         sys.exit(1)
