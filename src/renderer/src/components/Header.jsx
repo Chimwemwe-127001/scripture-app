@@ -27,7 +27,14 @@ export default function Header({
     if (!api) return
     setLoadingDevices(true)
     api.getAudioDevices().then(result => {
-      if (Array.isArray(result)) setDevices(result)
+      if (Array.isArray(result)) {
+        setDevices(result)
+        // If the currently selected device is no longer in the list (e.g. it was a
+        // WASAPI loopback device that was filtered out), reset to system default.
+        if (deviceIndex != null && !result.some(d => d.index === deviceIndex)) {
+          onDeviceChange(null)
+        }
+      }
       setLoadingDevices(false)
     })
   }, [])
