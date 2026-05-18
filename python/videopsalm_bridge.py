@@ -1,8 +1,8 @@
 """
-videopsalm_bridge.py  --  Send a Bible reference to VideoPsalm's reference input.
+videopsalm_bridge.py  --  Send a Bible reference to VideoPsalm's reference search box.
 
-Uses Win32 API directly (WinForms controls are not accessible via UIA).
-The target control: class=WindowsForms10.EDIT, placeholder text contains "Reference to select".
+VP is a WinForms app. WM_SETTEXT is ignored by its custom TextBox.
+Reliable approach: click the reference input to focus it, then simulate keyboard input.
 
 Usage:
     python videopsalm_bridge.py "John 3:16"
@@ -14,11 +14,13 @@ import time
 import win32gui
 import win32con
 import win32process
+import win32api
 import psutil
+from pywinauto.keyboard import send_keys
 
 
 def find_vp_hwnd():
-    """Return the main VideoPsalm window handle (by process name + title)."""
+    """Return VP's main window handle (process=videopsalm.exe, title contains 'VideoPsalm')."""
     found = []
 
     def cb(hwnd, _):
@@ -26,8 +28,7 @@ def find_vp_hwnd():
             return True
         try:
             _, pid = win32process.GetWindowThreadProcessId(hwnd)
-            pname = psutil.Process(pid).name().lower()
-            if pname == 'videopsalm.exe':
+            if psutil.Process(pid).name().lower() == 'videopsalm.exe':
                 title = win32gui.GetWindowText(hwnd)
                 if 'videopsalm' in title.lower():
                     found.append(hwnd)
@@ -40,15 +41,13 @@ def find_vp_hwnd():
 
 
 def find_reference_edit(parent_hwnd):
-    """Find the reference input edit box inside VP (the WinForms TextBox)."""
+    """Find VP's reference TextBox — the EDIT control whose hint text contains 'reference'."""
     found = []
 
     def cb(hwnd, _):
         try:
-            cn = win32gui.GetClassName(hwnd)
-            if 'EDIT' in cn.upper() and win32gui.IsWindowVisible(hwnd):
-                txt = win32gui.GetWindowText(hwnd)
-                found.append((hwnd, txt))
+            if 'EDIT' in win32gui.GetClassName(hwnd).upper() and win32gui.IsWindowVisible(hwnd):
+                found.append((hwnd, win32gui.GetWindowText(hwnd)))
         except Exception:
             pass
         return True
@@ -58,11 +57,9 @@ def find_reference_edit(parent_hwnd):
     except Exception:
         pass
 
-    # Prefer the one with "reference" in its hint text
     for hwnd, txt in found:
         if 'reference' in txt.lower():
             return hwnd
-    # Fall back to any visible EDIT control
     return found[0][0] if found else None
 
 
@@ -71,7 +68,7 @@ def is_running():
 
 
 def send_reference(reference):
-    """Type a reference into VP's search box and press Enter."""
+    """Click VP's reference input, type the reference, and press Enter."""
     try:
         vp_hwnd = find_vp_hwnd()
         if not vp_hwnd:
@@ -81,21 +78,27 @@ def send_reference(reference):
         if not edit_hwnd:
             return False, "Could not find reference input in VideoPsalm"
 
-        # Bring VP to foreground so key events are processed
+        # Get screen coordinates of the edit control
+        rect = win32gui.GetWindowRect(edit_hwnd)
+        cx = (rect[0] + rect[2]) // 2
+        cy = (rect[1] + rect[3]) // 2
+
+        # Bring VP to foreground
         win32gui.ShowWindow(vp_hwnd, 9)   # SW_RESTORE
         win32gui.SetForegroundWindow(vp_hwnd)
         time.sleep(0.2)
 
-        # Set the text directly (cross-process safe for Win32/WinForms)
-        win32gui.SendMessage(edit_hwnd, win32con.WM_SETTEXT, 0, reference)
-        time.sleep(0.1)
+        # Click the edit box to focus it and dismiss hint text
+        win32api.SetCursorPos((cx, cy))
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, cx, cy, 0, 0)
+        time.sleep(0.05)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
+        time.sleep(0.15)
 
-        # Send Enter key events to the edit control
-        win32gui.PostMessage(edit_hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0x001C0001)
-        time.sleep(0.05)
-        win32gui.PostMessage(edit_hwnd, win32con.WM_CHAR, 0x0D, 0x001C0001)
-        time.sleep(0.05)
-        win32gui.PostMessage(edit_hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0xC01C0001)
+        # Select-all + type reference + Enter
+        send_keys('^a', pause=0.05)
+        send_keys(reference, with_spaces=True, pause=0.02)
+        send_keys('{ENTER}')
 
         return True, None
     except Exception as e:
