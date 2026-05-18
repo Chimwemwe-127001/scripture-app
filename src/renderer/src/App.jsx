@@ -5,8 +5,18 @@ import SuggestionPanel from './components/SuggestionPanel'
 import SentScreen from './components/SelectedQueue'
 import { SERMON_EXCERPT, MOCK_SCRIPTURES } from './data/mockData'
 
-const SUGGESTION_MAX = 10
+const SUGGESTION_MAX  = 10
 const SUGGESTION_TTL_MS = 5 * 60 * 1000  // 5 minutes
+
+// Rotating palette — each chunk gets a unique accent color
+const CHUNK_COLORS = [
+  { bg: 'rgba(251,191,36,0.15)',  border: '#fbbf24', text: '#fcd34d' }, // amber
+  { bg: 'rgba(56,189,248,0.15)',  border: '#38bdf8', text: '#7dd3fc' }, // sky
+  { bg: 'rgba(244,114,182,0.15)', border: '#f472b6', text: '#f9a8d4' }, // pink
+  { bg: 'rgba(52,211,153,0.15)',  border: '#34d399', text: '#6ee7b7' }, // emerald
+  { bg: 'rgba(167,139,250,0.15)', border: '#a78bfa', text: '#c4b5fd' }, // violet
+  { bg: 'rgba(251,146,60,0.15)',  border: '#fb923c', text: '#fdba74' }, // orange
+]
 
 const api = window.electronAPI   // undefined in browser-only dev
 
@@ -18,6 +28,10 @@ export default function App() {
   const [statusMsg, setStatusMsg]       = useState('')
   const [errorMsg, setErrorMsg]         = useState('')
   const [demoMode, setDemoMode]         = useState(!api)  // auto-demo when no Electron API
+
+  // Chunk analysis state for transcript highlighting + analyzing indicator
+  const [analyzingChunks, setAnalyzingChunks] = useState([])   // [{chunkId, startAt, fireAt}]
+  const [chunkHighlights, setChunkHighlights] = useState([])   // [{chunkId, startAt, fireAt, color, addedAt}]
 
   // LLM (LM Studio) status
   const [llmStatus, setLlmStatus]       = useState(null)   // { ok, model, error }
@@ -45,13 +59,12 @@ export default function App() {
     api.checkVideoPsalm?.().then(r => setVpStatus(r?.running ?? false))
   }, [])
 
-  // ------------------------------------------------------------------
-  // Suggestion cap + TTL expiry (every 60s, drop cards older than 5 min)
-  // ------------------------------------------------------------------
+  // Suggestion cap + TTL expiry (every 60s, drop cards and highlights older than 5 min)
   useEffect(() => {
     const id = setInterval(() => {
       const cutoff = Date.now() - SUGGESTION_TTL_MS
       setSuggestions(prev => prev.filter(s => !s.addedAt || s.addedAt > cutoff))
+      setChunkHighlights(prev => prev.filter(h => !h.addedAt || h.addedAt > cutoff))
     }, 60_000)
     return () => clearInterval(id)
   }, [])
@@ -74,6 +87,8 @@ export default function App() {
   function startDemoMode() {
     stopDemoTimers()
     setSegments([])
+    setChunkHighlights([])
+    setAnalyzingChunks([])
     scriptureIdxRef.current = 0
     demoWordIdxRef.current  = 0
     setIsListening(true)
@@ -101,7 +116,21 @@ export default function App() {
     const scheduleScripture = (delay) => {
       const t = setTimeout(() => {
         if (scriptureIdxRef.current < MOCK_SCRIPTURES.length) {
-          const s = { ...MOCK_SCRIPTURES[scriptureIdxRef.current++], addedAt: Date.now() }
+          const idx    = scriptureIdxRef.current++
+          const color  = CHUNK_COLORS[idx % CHUNK_COLORS.length]
+          const now    = Date.now()
+          const fakeChunkId = idx + 1
+          const s = {
+            ...MOCK_SCRIPTURES[idx],
+            addedAt: now,
+            chunkId: fakeChunkId,
+            chunkColor: color,
+            startAt: now - 9000,
+            fireAt: now,
+          }
+          setChunkHighlights(prev => [...prev, {
+            chunkId: fakeChunkId, startAt: now - 9000, fireAt: now, color, addedAt: now,
+          }])
           setSuggestions(prev => [s, ...prev].slice(0, SUGGESTION_MAX))
           scheduleScripture(9000)
         }
@@ -125,6 +154,8 @@ export default function App() {
     if (!api) { startDemoMode(); return }
     setErrorMsg('')
     setSuggestions([])
+    setChunkHighlights([])
+    setAnalyzingChunks([])
     setStatusMsg('Starting Whisper…')
     await api.startListening({ model: whisperModel, deviceIndex })
   }
@@ -150,18 +181,32 @@ export default function App() {
       setIsListening(false)
     })
     api.onScriptureSuggestion((card) => {
+      const color = CHUNK_COLORS[((card.chunkId ?? 1) - 1) % CHUNK_COLORS.length]
+      setChunkHighlights(prev => {
+        if (prev.some(h => h.chunkId === card.chunkId)) return prev
+        return [...prev, {
+          chunkId: card.chunkId, startAt: card.startAt, fireAt: card.fireAt,
+          color, addedAt: Date.now(),
+        }]
+      })
       setSuggestions(prev => {
-        const stamped = { ...card, addedAt: Date.now() }
-        const next = [stamped, ...prev]
-        return next.slice(0, SUGGESTION_MAX)
+        const stamped = { ...card, addedAt: Date.now(), chunkColor: color }
+        return [stamped, ...prev].slice(0, SUGGESTION_MAX)
       })
     })
     api.onLlmError?.((data) => {
       setErrorMsg(`LM Studio error: ${data.message || 'Channel Error — try reloading the model in LM Studio'}`)
     })
+    api.onAnalyzing?.(({ chunkId, startAt, fireAt }) => {
+      setAnalyzingChunks(prev => [...prev, { chunkId, startAt, fireAt }])
+    })
+    api.onAnalyzingDone?.(({ chunkId }) => {
+      setAnalyzingChunks(prev => prev.filter(c => c.chunkId !== chunkId))
+    })
 
     return () => {
-      ['transcript-update', 'listening-status', 'listening-error', 'scripture-suggestion', 'llm-error'].forEach(
+      ['transcript-update', 'listening-status', 'listening-error', 'scripture-suggestion',
+       'llm-error', 'scripture-analyzing', 'scripture-analyzing-done'].forEach(
         ch => api.removeAllListeners(ch)
       )
     }
@@ -268,7 +313,13 @@ export default function App() {
         </div>
       )}
       <div className="flex flex-1 overflow-hidden gap-2 p-2">
-        <TranscriptPanel segments={segments} isListening={isListening} onClear={() => setSegments([])} />
+        <TranscriptPanel
+          segments={segments}
+          isListening={isListening}
+          isAnalyzing={analyzingChunks.length > 0}
+          chunkHighlights={chunkHighlights}
+          onClear={() => { setSegments([]); setChunkHighlights([]) }}
+        />
         <SuggestionPanel
           suggestions={suggestions}
           onSent={handleSent}
