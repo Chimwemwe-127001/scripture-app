@@ -76,7 +76,7 @@ class LlmClient {
               { role: 'user',   content: text.trim() },
             ],
             temperature: 0.1,
-            max_tokens: 512,
+            max_tokens: 256,
             stream: false,
           }),
           signal: AbortSignal.timeout(25000),
