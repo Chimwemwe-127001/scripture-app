@@ -5,6 +5,9 @@ import SuggestionPanel from './components/SuggestionPanel'
 import SentScreen from './components/SelectedQueue'
 import { SERMON_EXCERPT, MOCK_SCRIPTURES } from './data/mockData'
 
+const SUGGESTION_MAX = 10
+const SUGGESTION_TTL_MS = 5 * 60 * 1000  // 5 minutes
+
 const api = window.electronAPI   // undefined in browser-only dev
 
 export default function App() {
@@ -40,6 +43,17 @@ export default function App() {
     api.checkBibleDb().then(r => setBibleDbReady(r.ready))
     api.checkLlmStatus().then(r => setLlmStatus(r))
     api.checkVideoPsalm?.().then(r => setVpStatus(r?.running ?? false))
+  }, [])
+
+  // ------------------------------------------------------------------
+  // Suggestion cap + TTL expiry (every 60s, drop cards older than 5 min)
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const id = setInterval(() => {
+      const cutoff = Date.now() - SUGGESTION_TTL_MS
+      setSuggestions(prev => prev.filter(s => !s.addedAt || s.addedAt > cutoff))
+    }, 60_000)
+    return () => clearInterval(id)
   }, [])
 
   // ------------------------------------------------------------------
@@ -87,8 +101,8 @@ export default function App() {
     const scheduleScripture = (delay) => {
       const t = setTimeout(() => {
         if (scriptureIdxRef.current < MOCK_SCRIPTURES.length) {
-          const s = MOCK_SCRIPTURES[scriptureIdxRef.current++]
-          setSuggestions(prev => [s, ...prev])
+          const s = { ...MOCK_SCRIPTURES[scriptureIdxRef.current++], addedAt: Date.now() }
+          setSuggestions(prev => [s, ...prev].slice(0, SUGGESTION_MAX))
           scheduleScripture(9000)
         }
       }, delay)
@@ -136,7 +150,11 @@ export default function App() {
       setIsListening(false)
     })
     api.onScriptureSuggestion((card) => {
-      setSuggestions(prev => [card, ...prev])
+      setSuggestions(prev => {
+        const stamped = { ...card, addedAt: Date.now() }
+        const next = [stamped, ...prev]
+        return next.slice(0, SUGGESTION_MAX)
+      })
     })
 
     return () => {
@@ -247,11 +265,11 @@ export default function App() {
         </div>
       )}
       <div className="flex flex-1 overflow-hidden gap-2 p-2">
-        <TranscriptPanel segments={segments} isListening={isListening} />
+        <TranscriptPanel segments={segments} isListening={isListening} onClear={() => setSegments([])} />
         <SuggestionPanel
           suggestions={suggestions}
-          onSelect={(s) => handleSent(s, false)}
           onSent={handleSent}
+          onClear={() => setSuggestions([])}
           bibleDbReady={bibleDbReady}
           llmStatus={llmStatus}
         />

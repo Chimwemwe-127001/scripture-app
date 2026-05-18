@@ -1,35 +1,26 @@
 """
-videopsalm_bridge.py  —  Send a Bible reference to VideoPsalm's search box.
+videopsalm_bridge.py -- Send a Bible reference to VideoPsalm's search box.
 
 Usage:
     python videopsalm_bridge.py "John 3:16"
-    python videopsalm_bridge.py --check        # only check if VP is running
-
-Outputs JSON on stdout:
-    {"ok": true}
-    {"ok": false, "error": "..."}
-    {"running": true/false}   (for --check)
+    python videopsalm_bridge.py --check   # only check if VP is running
 """
-
 import sys
 import json
 import time
 
+
 def find_videopsalm_window():
-    """Return (app, window) or raise RuntimeError."""
     from pywinauto import Application
     from pywinauto.findwindows import find_windows
-
     handles = find_windows(title_re=r".*VideoPsalm.*")
     if not handles:
         raise RuntimeError("VideoPsalm is not running")
-
     app = Application(backend="uia").connect(handle=handles[0])
     return app, app.top_window()
 
 
 def is_running():
-    """Return True if a VideoPsalm window is open."""
     try:
         from pywinauto.findwindows import find_windows
         handles = find_windows(title_re=r".*VideoPsalm.*")
@@ -39,7 +30,6 @@ def is_running():
 
 
 def find_reference_input(window):
-    """Walk the control tree for the first visible Edit box."""
     try:
         for ctrl in window.descendants(control_type="Edit"):
             try:
@@ -95,115 +85,6 @@ if __name__ == "__main__":
         print(json.dumps({"running": is_running()}), flush=True)
         sys.exit(0)
 
-    if len(sys.argv) < 2:
-        print(json.dumps({"ok": False, "error": "Usage: videopsalm_bridge.py <reference>"}))
-        sys.exit(1)
-
-    reference = sys.argv[1]
-    ok, error = send_reference(reference)
-    result = {"ok": ok}
-    if error:
-        result["error"] = error
-    print(json.dumps(result), flush=True)
-    sys.exit(0 if ok else 1)
-
-
-Usage:
-    python videopsalm_bridge.py "John 3:16"
-
-Outputs JSON on stdout:
-    {"ok": true}
-    {"ok": false, "error": "..."}
-
-Strategy:
-1. Find any window whose title contains "VideoPsalm"
-2. Use pywinauto UIA backend to locate the reference Edit control
-3. Clear, type the reference, press Enter
-4. Falls back to clipboard + keyboard if control discovery fails
-"""
-
-import sys
-import json
-import time
-
-def find_videopsalm_window():
-    """Return (app, window) or raise RuntimeError."""
-    from pywinauto import Application
-    from pywinauto.findwindows import find_windows
-
-    handles = find_windows(title_re=r".*VideoPsalm.*")
-    if not handles:
-        raise RuntimeError("VideoPsalm is not running")
-
-    app = Application(backend="uia").connect(handle=handles[0])
-    return app, app.top_window()
-
-
-def find_reference_input(window):
-    """
-    Walk the control tree looking for the 'Reference to select' Edit box.
-    Returns a control wrapper or None.
-    """
-    try:
-        for ctrl in window.descendants(control_type="Edit"):
-            try:
-                if ctrl.is_visible():
-                    return ctrl          # take the first visible Edit
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
-
-
-def send_via_uia(window, reference):
-    """Type reference into the Edit control and press Enter."""
-    ctrl = find_reference_input(window)
-    if ctrl is None:
-        raise RuntimeError("Could not find reference input control in VideoPsalm")
-
-    ctrl.set_focus()
-    time.sleep(0.05)
-    ctrl.set_edit_text("")
-    ctrl.type_keys(reference + "{ENTER}", with_spaces=True)
-
-
-def send_via_clipboard(window, reference):
-    """Fallback: put reference on clipboard, focus VideoPsalm, Ctrl+A Ctrl+V Enter."""
-    import subprocess
-    # Write to Windows clipboard via PowerShell (no extra deps needed)
-    subprocess.run(
-        ["powershell", "-Command", f"Set-Clipboard -Value '{reference}'"],
-        capture_output=True
-    )
-    window.set_focus()
-    time.sleep(0.15)
-
-    from pywinauto.keyboard import send_keys
-    send_keys("^a^v{ENTER}")
-
-
-def send_reference(reference):
-    try:
-        _app, window = find_videopsalm_window()
-        window.set_focus()
-        time.sleep(0.1)
-
-        try:
-            send_via_uia(window, reference)
-        except Exception as uia_err:
-            # UIA failed — try clipboard fallback
-            send_via_clipboard(window, reference)
-
-        return True, None
-
-    except ImportError:
-        return False, "pywinauto is not installed (run: pip install pywinauto)"
-    except Exception as e:
-        return False, str(e)
-
-
-if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(json.dumps({"ok": False, "error": "Usage: videopsalm_bridge.py <reference>"}))
         sys.exit(1)

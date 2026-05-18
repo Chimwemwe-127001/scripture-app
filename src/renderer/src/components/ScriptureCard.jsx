@@ -85,12 +85,11 @@ function SendToScreenBtn({ scripture, onSent }) {
   )
 }
 
-export default function ScriptureCard({ scripture, onSelect, onSent }) {
+export default function ScriptureCard({ scripture, onSent }) {
   const conf = CONFIDENCE_STYLES[scripture.confidence] || CONFIDENCE_STYLES.low
   const copyText = `${scripture.reference} (${scripture.translation})\n"${scripture.text}"`
 
   const handleCardClick = () => {
-    onSelect?.(scripture)
     onSent?.(scripture, false)
   }
 

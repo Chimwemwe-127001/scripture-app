@@ -1,6 +1,6 @@
 import ScriptureCard from './ScriptureCard'
 
-export default function SuggestionPanel({ suggestions, onSelect, onSent, bibleDbReady, llmStatus }) {
+export default function SuggestionPanel({ suggestions, onSent, bibleDbReady, llmStatus, onClear }) {
   // Build contextual hints for the empty state
   const hints = []
   if (bibleDbReady === false) hints.push({ icon: '📖', msg: 'Bible DB not set up — run npm run setup-bible' })
@@ -17,9 +17,18 @@ export default function SuggestionPanel({ suggestions, onSelect, onSent, bibleDb
           <span className="text-xs font-semibold text-surface-4 uppercase tracking-wider">Suggestions</span>
         </div>
         {suggestions.length > 0 && (
-          <span className="bg-brand text-white text-xs font-bold px-2 py-0.5 rounded-full">
-            {suggestions.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="bg-brand text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {suggestions.length}
+            </span>
+            <button
+              onClick={onClear}
+              title="Clear all suggestions"
+              className="text-xs text-surface-4 hover:text-red-400 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
         )}
       </div>
 
@@ -47,7 +56,7 @@ export default function SuggestionPanel({ suggestions, onSelect, onSent, bibleDb
           </div>
         ) : (
           suggestions.map(s => (
-            <ScriptureCard key={s.id} scripture={s} onSelect={onSelect} onSent={onSent} />
+            <ScriptureCard key={s.id} scripture={s} onSent={onSent} />
           ))
         )}
       </div>
