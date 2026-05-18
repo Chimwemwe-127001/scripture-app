@@ -49,6 +49,80 @@ function killWhisper() {
 }
 
 // ---------------------------------------------------------------------------
+// Persistent VideoPsalm bridge daemon
+// ---------------------------------------------------------------------------
+
+let _vpProc     = null   // the long-lived python process
+let _vpQueue    = []     // pending {cmd, resolve, reject}
+let _vpBusy     = false
+let _vpLineBuf  = ''
+
+function _getVpProc() {
+  if (_vpProc && !_vpProc.killed) return _vpProc
+
+  _vpProc    = spawn(pythonCmd(), [join(pythonDir(), 'videopsalm_bridge.py'), '--daemon'])
+  _vpLineBuf = ''
+
+  _vpProc.stdout.on('data', (data) => {
+    _vpLineBuf += data.toString()
+    const lines = _vpLineBuf.split('\n')
+    _vpLineBuf  = lines.pop()  // keep any incomplete trailing line
+    for (const line of lines) {
+      if (!line.trim()) continue
+      if (_vpQueue.length > 0) {
+        const { resolve } = _vpQueue.shift()
+        try   { resolve(JSON.parse(line.trim())) }
+        catch { resolve({ ok: false, error: 'Bad JSON from bridge' }) }
+        _vpBusy = false
+        _drainVpQueue()
+      }
+    }
+  })
+
+  _vpProc.on('exit', () => {
+    _vpProc = null
+    _vpBusy = false
+    for (const { reject } of _vpQueue) reject(new Error('VP bridge exited'))
+    _vpQueue = []
+  })
+
+  _vpProc.stderr.on('data', () => {})  // silence stderr
+  return _vpProc
+}
+
+function _drainVpQueue() {
+  if (_vpBusy || _vpQueue.length === 0) return
+  _vpBusy = true
+  const proc = _getVpProc()
+  proc.stdin.write(_vpQueue[0].cmd + '\n')
+}
+
+function callVpBridge(params) {
+  return new Promise((resolve, reject) => {
+    _vpQueue.push({ cmd: JSON.stringify(params), resolve, reject })
+    _drainVpQueue()
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Instant regex — runs on EVERY transcript segment (no 5s wait)
+// ---------------------------------------------------------------------------
+
+async function processInstantRefs(text) {
+  const refs = bibleExtractor.extract(text)
+  for (const ref of refs) {
+    if (!ref.reference || sentRefs.has(ref.reference)) continue
+    const card = await bibleDb.lookupVerse(ref)
+    if (!card) continue
+    sentRefs.add(ref.reference)
+    const now = Date.now()
+    mainWindow?.webContents.send('scripture-suggestion', {
+      ...card, chunkId: null, startAt: now - 300, fireAt: now + 300,
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Chunker → LLM → Bible DB pipeline
 // ---------------------------------------------------------------------------
 
@@ -116,6 +190,7 @@ ipcMain.handle('start-listening', async (_e, { model = 'small', deviceIndex = nu
           case 'transcript':
             mainWindow?.webContents.send('transcript-update', msg)
             chunker.addText(msg.text)
+            processInstantRefs(msg.text)   // instant regex — no 5s wait
             break
           case 'status':
             mainWindow?.webContents.send('listening-status', msg)
@@ -164,11 +239,13 @@ ipcMain.handle('stop-listening', async () => {
 })
 
 ipcMain.handle('check-videopsalm', async () => {
-  return runPythonJson('videopsalm_bridge.py', ['--check'])
+  try   { return await callVpBridge({ action: 'check' }) }
+  catch { return { running: false } }
 })
 
 ipcMain.handle('send-to-videopsalm', async (_e, reference) => {
-  return runPythonJson('videopsalm_bridge.py', [reference])
+  try   { return await callVpBridge({ action: 'send', reference }) }
+  catch (err) { return { ok: false, error: err.message } }
 })
 
 ipcMain.handle('copy-to-clipboard', (_e, text) => {

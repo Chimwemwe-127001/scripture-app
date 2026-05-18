@@ -181,14 +181,20 @@ export default function App() {
       setIsListening(false)
     })
     api.onScriptureSuggestion((card) => {
-      const color = CHUNK_COLORS[((card.chunkId ?? 1) - 1) % CHUNK_COLORS.length]
-      setChunkHighlights(prev => {
-        if (prev.some(h => h.chunkId === card.chunkId)) return prev
-        return [...prev, {
-          chunkId: card.chunkId, startAt: card.startAt, fireAt: card.fireAt,
-          color, addedAt: Date.now(),
-        }]
-      })
+      // chunkId === null means instant regex detection — color amber, no transcript highlight
+      const colorIdx = card.chunkId != null
+        ? ((card.chunkId - 1) % CHUNK_COLORS.length + CHUNK_COLORS.length) % CHUNK_COLORS.length
+        : 0
+      const color = CHUNK_COLORS[colorIdx]
+      if (card.chunkId != null) {
+        setChunkHighlights(prev => {
+          if (prev.some(h => h.chunkId === card.chunkId)) return prev
+          return [...prev, {
+            chunkId: card.chunkId, startAt: card.startAt, fireAt: card.fireAt,
+            color, addedAt: Date.now(),
+          }]
+        })
+      }
       setSuggestions(prev => {
         const stamped = { ...card, addedAt: Date.now(), chunkColor: color }
         return [stamped, ...prev].slice(0, SUGGESTION_MAX)

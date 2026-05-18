@@ -113,7 +113,7 @@ class LlmClient {
             model:       modelId,
             messages:    [{ role: 'user', content: userContent }],
             temperature: 0.1,
-            max_tokens:  256,
+            max_tokens:  80,
             stream:      false,
           }),
           signal: AbortSignal.timeout(25000),
