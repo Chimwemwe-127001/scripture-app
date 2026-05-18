@@ -40,6 +40,12 @@ def main():
     for idx, d in enumerate(devices):
         if d["max_input_channels"] <= 0:
             continue
+        # On Windows, WASAPI exposes speakers/output devices as loopback inputs.
+        # These pass the max_input_channels check but fail with paInvalidDevice (-9996)
+        # when PortAudio tries to open them as a regular input stream.
+        # Real microphones are pure input devices (max_output_channels == 0).
+        if d["max_output_channels"] > 0:
+            continue
         name = d["name"]
         if _is_junk(name):
             continue
