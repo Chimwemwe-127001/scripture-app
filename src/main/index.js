@@ -11,6 +11,10 @@ let whisperProcess = null
 // Deduplicate suggestions per listening session
 let sentRefs = new Set()
 
+// Rolling transcript context buffer — gives LLM sermon context beyond the current chunk
+const CONTEXT_MAX_WORDS = 160
+let _transcriptWords = []
+
 // ---------------------------------------------------------------------------
 // Python helpers
 // ---------------------------------------------------------------------------
@@ -129,11 +133,14 @@ async function processInstantRefs(text) {
 chunker.on('chunk', async ({ text, chunkId, startAt, fireAt }) => {
   mainWindow?.webContents.send('scripture-analyzing', { chunkId, startAt, fireAt })
 
+  // Snapshot rolling context before async call — gives LLM broader sermon perspective
+  const contextText = _transcriptWords.join(' ')
+
   // 1. Regex extraction — always runs, catches explicit references instantly
   const regexRefs = bibleExtractor.extract(text)
 
   // 2. LLM extraction — catches paraphrases/allusions when LM Studio is available
-  const llmRefs   = await llmClient.queryScriptures(text)
+  const llmRefs   = await llmClient.queryScriptures(text, contextText)
   const llmErr    = llmClient.getLastError()
   if (llmErr) {
     mainWindow?.webContents.send('llm-error', { message: llmErr })
@@ -172,6 +179,7 @@ ipcMain.handle('get-audio-devices', async () => {
 ipcMain.handle('start-listening', async (_e, { model = 'small', deviceIndex = null } = {}) => {
   killWhisper()
   sentRefs = new Set()
+  _transcriptWords = []
   chunker.start()
 
   const args = [join(pythonDir(), 'whisper_worker.py'), '--model', model]
@@ -191,6 +199,14 @@ ipcMain.handle('start-listening', async (_e, { model = 'small', deviceIndex = nu
             mainWindow?.webContents.send('transcript-update', msg)
             chunker.addText(msg.text)
             processInstantRefs(msg.text)   // instant regex — no 5s wait
+            // Accumulate rolling context for LLM (capped at CONTEXT_MAX_WORDS)
+            {
+              const incoming = msg.text.trim().split(/\s+/).filter(Boolean)
+              _transcriptWords.push(...incoming)
+              if (_transcriptWords.length > CONTEXT_MAX_WORDS) {
+                _transcriptWords = _transcriptWords.slice(-CONTEXT_MAX_WORDS)
+              }
+            }
             break
           case 'status':
             mainWindow?.webContents.send('listening-status', msg)
