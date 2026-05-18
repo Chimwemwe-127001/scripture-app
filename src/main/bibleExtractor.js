@@ -111,8 +111,8 @@ function extract(text) {
     `\\s+` +
     `(\\d+)` +
     `(?:` +
-      `[:\\s]\\s*(\\d+)` +     // :verse or space verse
-      `(?:\\s*[-–]\\s*(\\d+))?` // optional -endverse
+      `[:\\s]\\s*(\\d+)` +
+      `(?:\\s*[-\\u2013]\\s*(\\d+))?` +
     `)?`,
     'gi'
   )
