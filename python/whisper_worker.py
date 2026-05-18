@@ -69,11 +69,11 @@ def main():
     parser.add_argument("--device-index",  type=int,   default=None,
                         help="sounddevice input device index (omit for system default)")
     parser.add_argument("--sample-rate",   type=int,   default=16000)
-    parser.add_argument("--chunk-secs",    type=float, default=2.0,
+    parser.add_argument("--chunk-secs",    type=float, default=3.0,
                         help="Audio window fed to Whisper (seconds)")
     parser.add_argument("--overlap-secs",  type=float, default=0.5,
                         help="Overlap kept after each chunk (seconds)")
-    parser.add_argument("--vad-threshold", type=float, default=0.004,
+    parser.add_argument("--vad-threshold", type=float, default=0.015,
                         help="RMS energy gate — chunks quieter than this are skipped (0 = disable)")
     args = parser.parse_args()
 
@@ -127,20 +127,24 @@ def main():
                     task="transcribe",
                     temperature=0,                   # deterministic; no sampling
                     condition_on_previous_text=False, # prevent hallucination cascades
-                    no_speech_threshold=0.6,          # Whisper's built-in silence gate
-                    logprob_threshold=-1.0,           # drop low-confidence segments
+                    no_speech_threshold=0.5,          # suppress if >50% chance of silence
+                    logprob_threshold=-0.8,           # drop low-confidence segments
                     compression_ratio_threshold=2.4,  # drop repetitive/looping output
+                    # Anchors Whisper vocabulary to church speech — reduces random
+                    # hallucination when audio is unclear or between sentences.
+                    initial_prompt=(
+                        "Church sermon. Bible, scripture, Jesus, God, Holy Spirit, "
+                        "prayer, faith, grace, amen. Psalm, John, Romans, Genesis."
+                    ),
                 )
 
                 # Filter at segment level using Whisper's own confidence scores.
-                # result["text"] includes ALL segments; we only want ones where
-                # Whisper is confident it heard real speech.
                 segments = result.get("segments", [])
                 good_parts = [
                     seg["text"].strip()
                     for seg in segments
-                    if seg.get("no_speech_prob", 1.0) < 0.6        # likely speech
-                    and seg.get("avg_logprob", -999)  > -1.2        # confident words
+                    if seg.get("no_speech_prob", 1.0) < 0.5   # tighter: was 0.6
+                    and seg.get("avg_logprob", -999)  > -0.8   # tighter: was -1.2
                 ]
                 text = " ".join(good_parts).strip()
 
