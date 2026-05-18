@@ -169,7 +169,10 @@ def main():
     except KeyboardInterrupt:
         pass
     except Exception as exc:
-        emit({"type": "error", "message": f"Audio stream error: {exc}"})
+        msg = str(exc)
+        if "InvalidDevice" in msg or "-9996" in msg:
+            msg = (f"Invalid audio device — please select a microphone from the Input dropdown. ({exc})")
+        emit({"type": "error", "message": f"Audio stream error: {msg}"})
     finally:
         stop_event.set()
         emit({"type": "status", "message": "Stopped.", "listening": False})
