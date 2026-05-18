@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-export default function TranscriptPanel({ segments, isListening, onClear }) {
+export default function TranscriptPanel({ segments, isListening, isAnalyzing, chunkHighlights = [], onClear }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -8,6 +8,13 @@ export default function TranscriptPanel({ segments, isListening, onClear }) {
   }, [segments])
 
   const wordCount = segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0)
+
+  function getSegmentHighlight(seg) {
+    for (const h of chunkHighlights) {
+      if (seg.id >= h.startAt && seg.id <= h.fireAt + 1500) return h.color
+    }
+    return null
+  }
 
   return (
     <div className="flex flex-col w-64 shrink-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
@@ -40,13 +47,25 @@ export default function TranscriptPanel({ segments, isListening, onClear }) {
             <p className="text-xs opacity-50">Waiting for audio input…</p>
           </div>
         ) : (
-          <div className="text-sm text-slate-200 leading-relaxed space-y-1">
-            {segments.map((seg, i) => (
-              <span key={seg.id}>
-                {seg.text}
-                {i < segments.length - 1 ? ' ' : ''}
-              </span>
-            ))}
+          <div className="text-sm text-slate-200 leading-relaxed">
+            {segments.map((seg) => {
+              const hl = getSegmentHighlight(seg)
+              return (
+                <span
+                  key={seg.id}
+                  className="segment-enter"
+                  style={hl ? {
+                    backgroundColor: hl.bg,
+                    color: hl.text,
+                    borderRadius: '3px',
+                    padding: '1px 3px',
+                    margin: '0 1px',
+                  } : undefined}
+                >
+                  {seg.text}{' '}
+                </span>
+              )
+            })}
             {isListening && (
               <span className="inline-block w-2 h-3 ml-0.5 bg-brand-light rounded-sm animate-pulse align-middle" />
             )}
@@ -55,10 +74,20 @@ export default function TranscriptPanel({ segments, isListening, onClear }) {
         <div ref={bottomRef} />
       </div>
 
-      <div className="px-3 py-1.5 border-t border-surface-3 shrink-0">
+      <div className="px-3 py-1.5 border-t border-surface-3 shrink-0 flex items-center justify-between">
         <span className="text-xs text-surface-4">
           {wordCount} <span className="opacity-60">words</span>
         </span>
+        {isAnalyzing && (
+          <span className="flex items-center gap-1.5 text-xs text-amber-400">
+            <span className="flex gap-px items-end h-3">
+              <span className="w-0.5 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-0.5 h-3 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '120ms' }} />
+              <span className="w-0.5 h-1.5 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '240ms' }} />
+            </span>
+            <span>Analyzing…</span>
+          </span>
+        )}
       </div>
     </div>
   )

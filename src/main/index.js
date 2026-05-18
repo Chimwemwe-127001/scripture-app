@@ -52,7 +52,9 @@ function killWhisper() {
 // Chunker → LLM → Bible DB pipeline
 // ---------------------------------------------------------------------------
 
-chunker.on('chunk', async (text) => {
+chunker.on('chunk', async ({ text, chunkId, startAt, fireAt }) => {
+  mainWindow?.webContents.send('scripture-analyzing', { chunkId, startAt, fireAt })
+
   // 1. Regex extraction — always runs, catches explicit references instantly
   const regexRefs = bibleExtractor.extract(text)
 
@@ -79,8 +81,10 @@ chunker.on('chunk', async (text) => {
     const card = await bibleDb.lookupVerse(ref)
     if (!card) continue
     sentRefs.add(ref.reference)
-    mainWindow?.webContents.send('scripture-suggestion', card)
+    mainWindow?.webContents.send('scripture-suggestion', { ...card, chunkId, startAt, fireAt })
   }
+
+  mainWindow?.webContents.send('scripture-analyzing-done', { chunkId })
 })
 
 // ---------------------------------------------------------------------------

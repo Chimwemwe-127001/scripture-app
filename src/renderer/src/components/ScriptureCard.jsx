@@ -88,6 +88,7 @@ function SendToScreenBtn({ scripture, onSent }) {
 export default function ScriptureCard({ scripture, onSent }) {
   const conf = CONFIDENCE_STYLES[scripture.confidence] || CONFIDENCE_STYLES.low
   const copyText = `${scripture.reference} (${scripture.translation})\n"${scripture.text}"`
+  const chunkColor = scripture.chunkColor
 
   const handleCardClick = () => {
     onSent?.(scripture, false)
@@ -97,6 +98,7 @@ export default function ScriptureCard({ scripture, onSent }) {
     <div
       className="card-enter bg-surface-2 border border-surface-3 rounded-lg p-3 cursor-pointer
                  hover:border-brand/50 hover:bg-surface-3 transition-all duration-150 group"
+      style={chunkColor ? { borderLeftColor: chunkColor.border, borderLeftWidth: '3px' } : undefined}
       onClick={handleCardClick}
       title="Click to log to history"
     >

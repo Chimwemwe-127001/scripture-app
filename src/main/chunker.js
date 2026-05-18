@@ -18,9 +18,11 @@ const OVERLAP_WORDS = 20
 class Chunker extends EventEmitter {
   constructor() {
     super()
-    this._words  = []
-    this._timer  = null
-    this._running = false
+    this._words      = []
+    this._timer      = null
+    this._running    = false
+    this._chunkId    = 0
+    this._lastFireAt = 0
   }
 
   /** Feed new transcribed text in */
@@ -32,9 +34,11 @@ class Chunker extends EventEmitter {
 
   start() {
     if (this._running) return
-    this._running = true
-    this._words   = []
-    this._timer   = setInterval(() => this._tick(), INTERVAL_MS)
+    this._running    = true
+    this._words      = []
+    this._chunkId    = 0
+    this._lastFireAt = Date.now()
+    this._timer      = setInterval(() => this._tick(), INTERVAL_MS)
   }
 
   stop() {
@@ -62,12 +66,15 @@ class Chunker extends EventEmitter {
   }
 
   _fire() {
-    const chunk = this._words.slice(0, MAX_WORDS).join(' ')
-    // Keep overlap for context continuity
-    this._words = this._words.slice(
+    const fireAt  = Date.now()
+    const startAt = this._lastFireAt
+    const text    = this._words.slice(0, MAX_WORDS).join(' ')
+    this._words   = this._words.slice(
       Math.max(0, Math.min(MAX_WORDS, this._words.length) - OVERLAP_WORDS)
     )
-    this.emit('chunk', chunk)
+    this._lastFireAt = fireAt
+    const chunkId = ++this._chunkId
+    this.emit('chunk', { text, chunkId, startAt, fireAt })
   }
 }
 

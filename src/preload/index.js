@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onListeningError:      (cb) => ipcRenderer.on('listening-error',      (_e, d) => cb(d)),
   onScriptureSuggestion: (cb) => ipcRenderer.on('scripture-suggestion', (_e, d) => cb(d)),
   onLlmError:            (cb) => ipcRenderer.on('llm-error',            (_e, d) => cb(d)),
+  onAnalyzing:           (cb) => ipcRenderer.on('scripture-analyzing',      (_e, d) => cb(d)),
+  onAnalyzingDone:       (cb) => ipcRenderer.on('scripture-analyzing-done', (_e, d) => cb(d)),
 
   removeAllListeners: (ch) => ipcRenderer.removeAllListeners(ch),
 })
