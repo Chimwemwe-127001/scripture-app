@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
 
   // VideoPsalm integration
+  checkVideoPsalm:  () => ipcRenderer.invoke('check-videopsalm'),
   sendToVideoPsalm: (reference) => ipcRenderer.invoke('send-to-videopsalm', reference),
 
   // Incoming events from main process

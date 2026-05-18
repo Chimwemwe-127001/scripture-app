@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Header from './components/Header'
 import TranscriptPanel from './components/TranscriptPanel'
 import SuggestionPanel from './components/SuggestionPanel'
-import SelectedQueue from './components/SelectedQueue'
+import SentScreen from './components/SelectedQueue'
 import { SERMON_EXCERPT, MOCK_SCRIPTURES } from './data/mockData'
 
 const api = window.electronAPI   // undefined in browser-only dev
@@ -10,7 +10,7 @@ const api = window.electronAPI   // undefined in browser-only dev
 export default function App() {
   const [segments, setSegments]         = useState([])   // transcript segments
   const [suggestions, setSuggestions]   = useState([])
-  const [selectedQueue, setSelectedQueue] = useState([])
+  const [sentHistory, setSentHistory]   = useState([])   // {id, ...scripture, sentAt, sentToVP}
   const [isListening, setIsListening]   = useState(false)
   const [statusMsg, setStatusMsg]       = useState('')
   const [errorMsg, setErrorMsg]         = useState('')
@@ -21,6 +21,9 @@ export default function App() {
   const [llmEndpoint, setLlmEndpoint]   = useState('http://localhost:1234/v1')
   const [bibleDbReady, setBibleDbReady] = useState(false)
 
+  // VideoPsalm status
+  const [vpStatus, setVpStatus]         = useState(false)
+
   // Selected whisper model + audio device (controlled from Header)
   const [whisperModel, setWhisperModel]   = useState('small')
   const [deviceIndex, setDeviceIndex]     = useState(null)
@@ -30,12 +33,25 @@ export default function App() {
   const demoTimersRef   = useRef([])
 
   // ------------------------------------------------------------------
-  // Check LLM + Bible DB status on mount (real Electron only)
+  // Check LLM + Bible DB + VP status on mount (real Electron only)
   // ------------------------------------------------------------------
   useEffect(() => {
     if (!api) return
     api.checkBibleDb().then(r => setBibleDbReady(r.ready))
     api.checkLlmStatus().then(r => setLlmStatus(r))
+    api.checkVideoPsalm?.().then(r => setVpStatus(r?.running ?? false))
+  }, [])
+
+  // ------------------------------------------------------------------
+  // VP status polling every 15s
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!api?.checkVideoPsalm) return
+    const id = setInterval(async () => {
+      const r = await api.checkVideoPsalm()
+      setVpStatus(r?.running ?? false)
+    }, 15_000)
+    return () => clearInterval(id)
   }, [])
 
   // ------------------------------------------------------------------
@@ -49,7 +65,6 @@ export default function App() {
     setIsListening(true)
     setStatusMsg('Demo mode — simulated transcript')
 
-    // Transcript simulation: append 2–3 words every 700ms
     let wordBuf = []
     const wordTimer = setInterval(() => {
       if (demoWordIdxRef.current >= SERMON_EXCERPT.length) {
@@ -61,7 +76,6 @@ export default function App() {
       wordBuf.push(...SERMON_EXCERPT.slice(demoWordIdxRef.current, demoWordIdxRef.current + n))
       demoWordIdxRef.current += n
 
-      // Flush buffer as a segment every ~15 words for realistic phrasing
       if (wordBuf.length >= 12 || demoWordIdxRef.current >= SERMON_EXCERPT.length) {
         const text = wordBuf.join(' ')
         wordBuf = []
@@ -70,7 +84,6 @@ export default function App() {
     }, 700)
     demoTimersRef.current.push(wordTimer)
 
-    // Scripture simulation: first card at 4s, then every 9s
     const scheduleScripture = (delay) => {
       const t = setTimeout(() => {
         if (scriptureIdxRef.current < MOCK_SCRIPTURES.length) {
@@ -140,8 +153,7 @@ export default function App() {
   }, [demoMode])
 
   // ------------------------------------------------------------------
-  // Keyboard shortcuts: Ctrl+L = toggle listen, Esc = clear suggestions,
-  // Ctrl+D = toggle demo mode
+  // Keyboard shortcuts
   // ------------------------------------------------------------------
   useEffect(() => {
     const handler = (e) => {
@@ -185,18 +197,22 @@ export default function App() {
   }
 
   // ------------------------------------------------------------------
-  // Selected queue actions
+  // Sent history
+  // Called by ScriptureCard when user clicks card body (viaPsalm=false)
+  // or clicks Send to Screen button (viaPsalm=true, called from SendToScreenBtn)
   // ------------------------------------------------------------------
-  const handleSelect = (scripture) => {
-    setSelectedQueue(prev => {
-      if (prev.find(s => s.id === scripture.id)) return prev
-      return [...prev, scripture]
+  const handleSent = (scripture, viaPsalm = false) => {
+    setSentHistory(prev => {
+      // Avoid exact duplicates within 5s (e.g. double-click)
+      const recent = prev.find(s => s.reference === scripture.reference &&
+        Date.now() - s.sentAt < 5000)
+      if (recent) return prev
+      return [...prev, { ...scripture, sentAt: Date.now(), sentToVP: viaPsalm }]
     })
-    setSuggestions(prev => prev.filter(s => s.id !== scripture.id))
   }
 
-  const handleRemove = (id) => {
-    setSelectedQueue(prev => prev.filter(s => s.id !== id))
+  const handleRemoveFromHistory = (id) => {
+    setSentHistory(prev => prev.filter(s => s.id !== id))
   }
 
   // ------------------------------------------------------------------
@@ -214,6 +230,7 @@ export default function App() {
         llmStatus={llmStatus}
         llmEndpoint={llmEndpoint}
         bibleDbReady={bibleDbReady}
+        vpStatus={vpStatus}
         onModelChange={setWhisperModel}
         onDeviceChange={setDeviceIndex}
         onEndpointChange={handleEndpointChange}
@@ -231,10 +248,21 @@ export default function App() {
       )}
       <div className="flex flex-1 overflow-hidden gap-2 p-2">
         <TranscriptPanel segments={segments} isListening={isListening} />
-        <SuggestionPanel suggestions={suggestions} onSelect={handleSelect}
-          bibleDbReady={bibleDbReady} llmStatus={llmStatus} />
-        <SelectedQueue queue={selectedQueue} onRemove={handleRemove} />
+        <SuggestionPanel
+          suggestions={suggestions}
+          onSelect={(s) => handleSent(s, false)}
+          onSent={handleSent}
+          bibleDbReady={bibleDbReady}
+          llmStatus={llmStatus}
+        />
+        <SentScreen
+          history={sentHistory}
+          onRemove={handleRemoveFromHistory}
+          onClear={() => setSentHistory([])}
+        />
       </div>
     </div>
   )
 }
+
+

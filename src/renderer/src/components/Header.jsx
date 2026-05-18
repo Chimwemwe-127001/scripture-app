@@ -13,7 +13,7 @@ const api = window.electronAPI
 export default function Header({
   isListening, statusMsg, errorMsg, demoMode,
   whisperModel, deviceIndex,
-  llmStatus, llmEndpoint, bibleDbReady,
+  llmStatus, llmEndpoint, bibleDbReady, vpStatus,
   onModelChange, onDeviceChange, onEndpointChange,
   onToggleListen, onToggleDemo,
 }) {
@@ -94,6 +94,14 @@ export default function Header({
               ))}
             </select>
           </label>
+        )}
+
+        {/* VP status */}
+        {api && (
+          <div className="flex items-center gap-1 text-xs text-surface-4" title={vpStatus ? 'VideoPsalm is running' : 'VideoPsalm not detected'}>
+            <span className={`w-2 h-2 rounded-full transition-colors ${vpStatus ? 'bg-green-400' : 'bg-surface-4'}`} />
+            <span>VideoPsalm</span>
+          </div>
         )}
 
         {/* LM Studio endpoint + status */}

@@ -1,6 +1,6 @@
 import ScriptureCard from './ScriptureCard'
 
-export default function SuggestionPanel({ suggestions, onSelect, bibleDbReady, llmStatus }) {
+export default function SuggestionPanel({ suggestions, onSelect, onSent, bibleDbReady, llmStatus }) {
   // Build contextual hints for the empty state
   const hints = []
   if (bibleDbReady === false) hints.push({ icon: '📖', msg: 'Bible DB not set up — run npm run setup-bible' })
@@ -47,14 +47,14 @@ export default function SuggestionPanel({ suggestions, onSelect, bibleDbReady, l
           </div>
         ) : (
           suggestions.map(s => (
-            <ScriptureCard key={s.id} scripture={s} onSelect={onSelect} />
+            <ScriptureCard key={s.id} scripture={s} onSelect={onSelect} onSent={onSent} />
           ))
         )}
       </div>
 
       <div className="px-3 py-1.5 border-t border-surface-3 shrink-0">
         <span className="text-xs text-surface-4">
-          Click a card to add it to the <span className="text-white">selected queue</span>
+          Click card to log · <span className="text-white">Send to Screen</span> sends to VideoPsalm
           {' · '}
           <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">Ctrl+L</kbd> listen
           {' · '}
