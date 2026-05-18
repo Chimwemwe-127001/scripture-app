@@ -139,6 +139,14 @@ ipcMain.handle('stop-listening', async () => {
   return { stopped: true }
 })
 
+ipcMain.handle('check-videopsalm', async () => {
+  return runPythonJson('videopsalm_bridge.py', ['--check'])
+})
+
+ipcMain.handle('send-to-videopsalm', async (_e, reference) => {
+  return runPythonJson('videopsalm_bridge.py', [reference])
+})
+
 ipcMain.handle('copy-to-clipboard', (_e, text) => {
   clipboard.writeText(text)
   return { ok: true }
