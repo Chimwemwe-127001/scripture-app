@@ -79,10 +79,11 @@ class LlmClient {
 
   /**
    * Ask the LLM to identify Bible references in the given sermon chunk.
-   * @param {string} text  Sermon excerpt (~80 words)
+   * @param {string} text     Current sermon chunk (~8-80 words)
+   * @param {string} context  Rolling sermon context (last ~160 words) for disambiguation
    * @returns {Promise<Array>}  Array of reference objects (may be empty)
    */
-  async queryScriptures(text) {
+  async queryScriptures(text, context = '') {
     if (!text?.trim()) return []
 
     const modelId = await this._getModelId()
@@ -91,9 +92,24 @@ class LlmClient {
       return []
     }
 
-    // Fold system prompt into user message — works with all models including
-    // Mistral which rejects the system role in its jinja template
-    const userContent = `${SYSTEM_PROMPT}\n\nSermon excerpt:\n${text.trim()}`
+    // Use two-section prompt when we have meaningful prior context (40+ words beyond chunk).
+    // Context is for DISAMBIGUATION only — the rule is explicit so the model doesn't
+    // hallucinate references grounded only in older sermon content.
+    const chunkWordCount   = text.trim().split(/\s+/).length
+    const contextWordCount = context.trim() ? context.trim().split(/\s+/).length : 0
+    const hasRichContext   = contextWordCount > chunkWordCount + 40
+
+    let userContent
+    if (hasRichContext) {
+      userContent = (
+        `${SYSTEM_PROMPT}\n\n` +
+        `Recent sermon context (use ONLY to disambiguate — do NOT return references that are ` +
+        `not directly supported by the Latest Segment below):\n${context.trim()}\n\n` +
+        `Latest segment (identify Bible references here):\n${text.trim()}`
+      )
+    } else {
+      userContent = `${SYSTEM_PROMPT}\n\nSermon excerpt:\n${text.trim()}`
+    }
 
     const MAX_RETRIES = 1
     const RETRY_DELAY_MS = 2000
@@ -113,7 +129,7 @@ class LlmClient {
             model:       modelId,
             messages:    [{ role: 'user', content: userContent }],
             temperature: 0.1,
-            max_tokens:  80,
+            max_tokens:  120,
             stream:      false,
           }),
           signal: AbortSignal.timeout(25000),
