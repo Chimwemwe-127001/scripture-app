@@ -1,81 +1,103 @@
 """
-videopsalm_bridge.py -- Send a Bible reference to VideoPsalm's search box.
+videopsalm_bridge.py  --  Send a Bible reference to VideoPsalm's reference input.
+
+Uses Win32 API directly (WinForms controls are not accessible via UIA).
+The target control: class=WindowsForms10.EDIT, placeholder text contains "Reference to select".
 
 Usage:
     python videopsalm_bridge.py "John 3:16"
-    python videopsalm_bridge.py --check   # only check if VP is running
+    python videopsalm_bridge.py --check
 """
 import sys
 import json
 import time
+import win32gui
+import win32con
+import win32process
+import psutil
 
 
-def find_videopsalm_window():
-    from pywinauto import Application
-    from pywinauto.findwindows import find_windows
-    handles = find_windows(title_re=r".*VideoPsalm.*")
-    if not handles:
-        raise RuntimeError("VideoPsalm is not running")
-    app = Application(backend="uia").connect(handle=handles[0])
-    return app, app.top_window()
+def find_vp_hwnd():
+    """Return the main VideoPsalm window handle (by process name + title)."""
+    found = []
+
+    def cb(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd):
+            return True
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            pname = psutil.Process(pid).name().lower()
+            if pname == 'videopsalm.exe':
+                title = win32gui.GetWindowText(hwnd)
+                if 'videopsalm' in title.lower():
+                    found.append(hwnd)
+        except Exception:
+            pass
+        return True
+
+    win32gui.EnumWindows(cb, None)
+    return found[0] if found else None
+
+
+def find_reference_edit(parent_hwnd):
+    """Find the reference input edit box inside VP (the WinForms TextBox)."""
+    found = []
+
+    def cb(hwnd, _):
+        try:
+            cn = win32gui.GetClassName(hwnd)
+            if 'EDIT' in cn.upper() and win32gui.IsWindowVisible(hwnd):
+                txt = win32gui.GetWindowText(hwnd)
+                found.append((hwnd, txt))
+        except Exception:
+            pass
+        return True
+
+    try:
+        win32gui.EnumChildWindows(parent_hwnd, cb, None)
+    except Exception:
+        pass
+
+    # Prefer the one with "reference" in its hint text
+    for hwnd, txt in found:
+        if 'reference' in txt.lower():
+            return hwnd
+    # Fall back to any visible EDIT control
+    return found[0][0] if found else None
 
 
 def is_running():
-    try:
-        from pywinauto.findwindows import find_windows
-        handles = find_windows(title_re=r".*VideoPsalm.*")
-        return len(handles) > 0
-    except Exception:
-        return False
-
-
-def find_reference_input(window):
-    try:
-        for ctrl in window.descendants(control_type="Edit"):
-            try:
-                if ctrl.is_visible():
-                    return ctrl
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
-
-
-def send_via_uia(window, reference):
-    ctrl = find_reference_input(window)
-    if ctrl is None:
-        raise RuntimeError("Could not find reference input control in VideoPsalm")
-    ctrl.set_focus()
-    time.sleep(0.05)
-    ctrl.set_edit_text("")
-    ctrl.type_keys(reference + "{ENTER}", with_spaces=True)
-
-
-def send_via_clipboard(window, reference):
-    import subprocess
-    subprocess.run(
-        ["powershell", "-Command", f"Set-Clipboard -Value '{reference}'"],
-        capture_output=True
-    )
-    window.set_focus()
-    time.sleep(0.15)
-    from pywinauto.keyboard import send_keys
-    send_keys("^a^v{ENTER}")
+    return find_vp_hwnd() is not None
 
 
 def send_reference(reference):
+    """Type a reference into VP's search box and press Enter."""
     try:
-        _app, window = find_videopsalm_window()
-        window.set_focus()
+        vp_hwnd = find_vp_hwnd()
+        if not vp_hwnd:
+            return False, "VideoPsalm is not running"
+
+        edit_hwnd = find_reference_edit(vp_hwnd)
+        if not edit_hwnd:
+            return False, "Could not find reference input in VideoPsalm"
+
+        # Bring VP to foreground so key events are processed
+        win32gui.ShowWindow(vp_hwnd, 9)   # SW_RESTORE
+        win32gui.SetForegroundWindow(vp_hwnd)
+        time.sleep(0.2)
+
+        # Set the text directly (cross-process safe for Win32/WinForms)
+        win32gui.SendMessage(edit_hwnd, win32con.WM_SETTEXT, 0, reference)
         time.sleep(0.1)
-        try:
-            send_via_uia(window, reference)
-        except Exception:
-            send_via_clipboard(window, reference)
+
+        # Send Enter key events to the edit control
+        win32gui.PostMessage(edit_hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0x001C0001)
+        time.sleep(0.05)
+        win32gui.PostMessage(edit_hwnd, win32con.WM_CHAR, 0x0D, 0x001C0001)
+        time.sleep(0.05)
+        win32gui.PostMessage(edit_hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0xC01C0001)
+
         return True, None
-    except ImportError:
-        return False, "pywinauto is not installed (run: pip install pywinauto)"
     except Exception as e:
         return False, str(e)
 
