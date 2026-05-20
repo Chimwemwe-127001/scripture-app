@@ -1,11 +1,14 @@
 /**
- * chunker.js — Rolling word-buffer that fires "chunk" events at regular
+ * chunker.js: rolling word buffer that fires "chunk" events at regular
  * intervals when enough new sermon text has accumulated.
  *
  * Strategy:
- *   - Every INTERVAL_MS (9 s) fire a chunk if ≥ MIN_WORDS new words exist
+ *   - Every INTERVAL_MS (5 s) fire a chunk if at least MIN_WORDS words exist
  *   - Chunk is at most MAX_WORDS words
  *   - After firing, retain the last OVERLAP_WORDS words as context
+ *
+ * The overlap means consecutive chunks share text, so the same reference can
+ * be detected twice. The de-duplication window in main/index.js handles that.
  */
 
 const { EventEmitter } = require('events')
@@ -50,7 +53,7 @@ class Chunker extends EventEmitter {
     this._words = []
   }
 
-  /** Force an immediate flush — used when listening stops */
+  /** Force an immediate flush, used when listening stops */
   flush() {
     if (this._words.length >= MIN_WORDS) {
       this._fire()

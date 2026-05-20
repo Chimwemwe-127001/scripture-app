@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * setup-bible-db.js
- * Downloads the KJV Bible JSON from scrollmapper/bible_databases and
- * creates a sql.js SQLite binary at bible-data/kjv.db
+ * setup-bible-db.js: builds the local KJV database.
  *
- * Run once:  node scripts/setup-bible-db.js
+ * Downloads the public-domain KJV CSV from scrollmapper/bible_databases and
+ * writes a SQLite file (31,102 verses) to bible-data/kjv.db using sql.js.
+ *
+ * Run once:  npm run setup-bible
  */
 
 const { join } = require('path')
@@ -30,11 +31,11 @@ const BOOK_NAMES = [
   '2 Peter','1 John','2 John','3 John','Jude','Revelation',
 ]
 
-// Build reverse map: book name → id
+// Build reverse map: book name -> id
 const BOOK_ID = {}
 BOOK_NAMES.forEach((name, i) => { if (name) BOOK_ID[name.toLowerCase()] = i })
 
-// The scrollmapper CSV uses Roman numerals and long Revelation title — add aliases
+// The scrollmapper CSV uses Roman numerals and long Revelation title, so add aliases
 const CSV_ALIASES = {
   'i samuel': '1 samuel',     'ii samuel': '2 samuel',
   'i kings': '1 kings',       'ii kings': '2 kings',
@@ -50,7 +51,7 @@ for (const [alias, canonical] of Object.entries(CSV_ALIASES)) {
   if (BOOK_ID[canonical] !== undefined) BOOK_ID[alias] = BOOK_ID[canonical]
 }
 
-// Proper RFC-4180 CSV parser — handles multi-line quoted fields
+// RFC 4180 CSV parser that handles multi-line quoted fields
 // Returns array of rows (each row is an array of field strings)
 function parseCsv(text) {
   const rows = []
@@ -78,7 +79,7 @@ function parseCsv(text) {
           }
         }
       } else {
-        // Unquoted field — read until comma or newline
+        // Unquoted field: read until comma or newline
         while (pos < len && text[pos] !== ',' && text[pos] !== '\r' && text[pos] !== '\n') {
           field += text[pos++]
         }
