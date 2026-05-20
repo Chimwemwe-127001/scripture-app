@@ -1,14 +1,16 @@
 /**
- * llmClient.js — Queries LM Studio's OpenAI-compatible API to extract
- * Bible references from a sermon excerpt.
+ * llmClient.js: queries LM Studio's OpenAI-compatible API to find Bible
+ * references (including paraphrases and allusions) in a sermon excerpt.
  *
  * LM Studio default endpoint: http://localhost:1234/v1
  *
- * Key findings from testing:
- * - `local-model` is no longer a valid model ID — must use the actual model ID
- * - Mistral 7B rejects `system` role messages (jinja template limitation)
- * - Fix: fold system prompt into user message; works with all models
+ * Notes from testing:
+ * - Requests must name the loaded model ID; the generic "local-model" is rejected.
+ * - Mistral 7B's chat template rejects the `system` role, so the instructions
+ *   are sent as part of the user message. This works with every model tried.
  */
+
+const log = require('./logger')
 
 const SYSTEM_PROMPT =
   'You are a Bible reference assistant for a church media operator. ' +
@@ -18,7 +20,7 @@ const SYSTEM_PROMPT =
   'Rules: "confidence" is "high" (direct quote), "medium" (paraphrase), or "low" (allusion). ' +
   '"trigger" is "explicit", "paraphrase", or "allusion". ' +
   '"verse_end" is null for single verses, integer for a range. ' +
-  'Return [] if no references are found. No preamble, no markdown fences, no explanation — raw JSON array only.'
+  'Return [] if no references are found. No preamble, no markdown fences, no explanation. Raw JSON array only.'
 
 // Models that should be excluded from chat (non-LLM model types)
 const SKIP_KEYWORDS = ['whisper', 'embed', 'nomic', 'tts', 'dall-e']
@@ -50,7 +52,7 @@ class LlmClient {
       const models = json?.data ?? []
       const chat = models.find(m => !SKIP_KEYWORDS.some(k => m.id.toLowerCase().includes(k)))
       this._modelId = chat?.id ?? null
-      if (this._modelId) console.log('[LLM] Using model:', this._modelId)
+      if (this._modelId) log.info('llm', 'Using model', { model: this._modelId })
       return this._modelId
     } catch {
       return null
@@ -92,9 +94,9 @@ class LlmClient {
       return []
     }
 
-    // Use two-section prompt when we have meaningful prior context (40+ words beyond chunk).
-    // Context is for DISAMBIGUATION only — the rule is explicit so the model doesn't
-    // hallucinate references grounded only in older sermon content.
+    // Use a two-section prompt when there is meaningful earlier context (40+
+    // words beyond the chunk). The context is for disambiguation only, and the
+    // prompt says so, so the model does not return references from older text.
     const chunkWordCount   = text.trim().split(/\s+/).length
     const contextWordCount = context.trim() ? context.trim().split(/\s+/).length : 0
     const hasRichContext   = contextWordCount > chunkWordCount + 40
@@ -103,7 +105,7 @@ class LlmClient {
     if (hasRichContext) {
       userContent = (
         `${SYSTEM_PROMPT}\n\n` +
-        `Recent sermon context (use ONLY to disambiguate — do NOT return references that are ` +
+        `Recent sermon context (use ONLY to disambiguate; do NOT return references that are ` +
         `not directly supported by the Latest Segment below):\n${context.trim()}\n\n` +
         `Latest segment (identify Bible references here):\n${text.trim()}`
       )
@@ -117,7 +119,7 @@ class LlmClient {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (attempt > 0) {
         await new Promise(r => setTimeout(r, RETRY_DELAY_MS))
-        console.warn(`[LLM] Retrying (attempt ${attempt}/${MAX_RETRIES})…`)
+        log.warn('llm', 'Retrying request', { attempt, maxRetries: MAX_RETRIES })
       }
 
       let res
@@ -129,13 +131,15 @@ class LlmClient {
             model:       modelId,
             messages:    [{ role: 'user', content: userContent }],
             temperature: 0.1,
-            max_tokens:  120,
+            // Room for several references. If the model still hits the limit,
+            // _parseResponse salvages the complete objects.
+            max_tokens:  256,
             stream:      false,
           }),
           signal: AbortSignal.timeout(25000),
         })
       } catch (err) {
-        console.error(`[LLM] fetch error (attempt ${attempt}):`, err.message)
+        log.error('llm', 'Request failed', { attempt, error: err.message })
         if (attempt === MAX_RETRIES) { this._lastError = err.message; return [] }
         continue
       }
@@ -143,8 +147,8 @@ class LlmClient {
       if (!res.ok) {
         let errBody = ''
         try { errBody = await res.text() } catch { /* ignore */ }
-        console.error(`[LLM] HTTP ${res.status} (attempt ${attempt}):`, errBody.slice(0, 200))
-        // Model ID may be stale (user switched model in LM Studio) — invalidate
+        log.error('llm', 'HTTP error', { attempt, status: res.status, body: errBody.slice(0, 200) })
+        // The model ID may be stale (model switched in LM Studio), so refetch it next time.
         if (res.status === 400) this._modelId = null
         if (attempt === MAX_RETRIES) { this._lastError = `HTTP ${res.status}`; return [] }
         continue
@@ -153,14 +157,14 @@ class LlmClient {
       let json
       try { json = await res.json() }
       catch (err) {
-        console.error('[LLM] JSON parse error:', err.message)
+        log.error('llm', 'Response was not JSON', { error: err.message })
         this._lastError = 'Bad JSON from LM Studio'
         return []
       }
 
       if (json?.error) {
         const msg = typeof json.error === 'string' ? json.error : JSON.stringify(json.error)
-        console.error(`[LLM] model error (attempt ${attempt}):`, msg)
+        log.error('llm', 'Model error', { attempt, error: msg })
         if (attempt === MAX_RETRIES) { this._lastError = `LM Studio: ${msg}`; return [] }
         continue
       }
@@ -177,9 +181,10 @@ class LlmClient {
     return this._lastError ?? null
   }
 
-  // -------------------------------------------------------------------------
-  // Parse LLM output, stripping any stray markdown fences
-  // -------------------------------------------------------------------------
+  /**
+   * Parse the model output into reference objects.
+   * Strips markdown fences and any text around the JSON array.
+   */
   _parseResponse(raw) {
     if (!raw) return []
 
@@ -187,16 +192,73 @@ class LlmClient {
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
 
     const start = text.indexOf('[')
-    const end   = text.lastIndexOf(']')
-    if (start === -1 || end === -1) return []
+    if (start === -1) return []
 
-    try {
-      const arr = JSON.parse(text.slice(start, end + 1))
-      return Array.isArray(arr) ? arr.filter(r => r.reference && r.book) : []
-    } catch (err) {
-      console.error('[LLM] response parse error:', err.message, '\nRaw:', text.slice(0, 200))
-      return []
+    const end = text.lastIndexOf(']')
+
+    // Normal case: a complete, well-formed array.
+    if (end > start) {
+      try {
+        const arr = JSON.parse(text.slice(start, end + 1))
+        if (Array.isArray(arr)) return arr.filter(r => r && r.reference && r.book)
+      } catch {
+        // Fall through to salvage. A malformed tail should not discard the
+        // objects that are complete before it.
+      }
     }
+
+    return this._salvageObjects(text.slice(start))
+  }
+
+  /**
+   * Recover whole `{...}` objects from a truncated or malformed array.
+   *
+   * If the model hits the token limit mid-object, the array is cut off and
+   * JSON.parse fails. This walks the string and keeps every balanced object
+   * it finds, ignoring the incomplete tail.
+   */
+  _salvageObjects(text) {
+    const out = []
+    let depth = 0
+    let objStart = -1
+    let inString = false
+    let escaped = false
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+
+      if (inString) {
+        if (escaped) escaped = false
+        else if (ch === '\\') escaped = true
+        else if (ch === '"') inString = false
+        continue
+      }
+
+      if (ch === '"') { inString = true; continue }
+
+      if (ch === '{') {
+        if (depth === 0) objStart = i
+        depth++
+      } else if (ch === '}') {
+        depth--
+        if (depth === 0 && objStart !== -1) {
+          try {
+            const obj = JSON.parse(text.slice(objStart, i + 1))
+            if (obj && obj.reference && obj.book) out.push(obj)
+          } catch { /* skip this object */ }
+          objStart = -1
+        } else if (depth < 0) {
+          depth = 0
+        }
+      }
+    }
+
+    if (out.length > 0) {
+      log.warn('llm', 'Salvaged references from a malformed response', { count: out.length })
+    } else {
+      log.error('llm', 'Unparseable response', { text: text.slice(0, 200) })
+    }
+    return out
   }
 }
 

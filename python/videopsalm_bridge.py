@@ -1,12 +1,14 @@
 """
-videopsalm_bridge.py  --  Send a Bible reference to VideoPsalm's reference search box.
+videopsalm_bridge.py: send a Bible reference to VideoPsalm's reference search box.
 
-VP is a WinForms app. WM_SETTEXT is ignored by its custom TextBox.
-Reliable approach: click the reference input to focus it, then simulate keyboard input.
+VideoPsalm is a WinForms app and its custom TextBox ignores WM_SETTEXT. The
+reliable approach is to click the reference input to focus it, then type the
+reference as simulated keyboard input.
 
 Usage:
-    python videopsalm_bridge.py "John 3:16"
-    python videopsalm_bridge.py --check
+    python videopsalm_bridge.py --daemon     # used by the app, JSON lines on stdin/stdout
+    python videopsalm_bridge.py --check      # is VideoPsalm running?
+    python videopsalm_bridge.py "John 3:16"  # one-off send
 """
 import sys
 import json
@@ -41,7 +43,7 @@ def find_vp_hwnd():
 
 
 def find_reference_edit(parent_hwnd):
-    """Find VP's reference TextBox — the EDIT control whose hint text contains 'reference'."""
+    """Find VP's reference TextBox: the EDIT control whose hint text contains 'reference'."""
     found = []
 
     def cb(hwnd, _):
