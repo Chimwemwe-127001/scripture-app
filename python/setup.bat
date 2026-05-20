@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo  Scripture Suggestion Panel — Python Setup
+echo  Scripture Suggestion Panel: Python Setup
 echo ============================================
 echo.
 echo Installing Python dependencies...

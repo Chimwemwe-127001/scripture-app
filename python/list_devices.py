@@ -14,7 +14,7 @@ def _is_junk(name: str) -> bool:
     n = name.lower().strip()
     if "@" in name:                             # @System32\drivers\... internal paths
         return True
-    if re.fullmatch(r"input\s*\(\s*\)", n):     # "Input ()" — no real name
+    if re.fullmatch(r"input\s*\(\s*\)", n):     # "Input ()": no real name
         return True
     if n in ("microsoft sound mapper - input",  # Windows virtual mappers
              "primary sound capture driver"):

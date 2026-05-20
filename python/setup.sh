@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 echo "============================================"
-echo " Scripture Suggestion Panel — Python Setup"
+echo " Scripture Suggestion Panel: Python Setup"
 echo "============================================"
 echo
 pip3 install -r "$(dirname "$0")/requirements.txt"
