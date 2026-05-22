@@ -15,6 +15,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Bible DB status
   checkBibleDb: () => ipcRenderer.invoke('check-bible-db'),
 
+  // Manual reference lookup, the operator's override when detection misses
+  lookupReference: (query) => ipcRenderer.invoke('lookup-reference', query),
+
+  // Persisted settings
+  getSettings:  () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (patch) => ipcRenderer.invoke('save-settings', patch),
+
+  // Diagnostics
+  getLogPath: () => ipcRenderer.invoke('get-log-path'),
+
   // Clipboard
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
 

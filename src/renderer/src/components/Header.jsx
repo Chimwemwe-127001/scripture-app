@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import ManualSearch from './ManualSearch'
 
 const MODELS = [
   { value: 'tiny',     label: 'tiny (~75 MB)' },
@@ -11,17 +12,22 @@ const MODELS = [
 const api = window.electronAPI
 
 export default function Header({
-  isListening, statusMsg, errorMsg, demoMode,
+  isListening, isStarting, statusMsg, errorMsg, demoMode,
   whisperModel, deviceIndex,
   llmStatus, llmEndpoint, bibleDbReady, vpStatus,
   onModelChange, onDeviceChange, onEndpointChange,
-  onToggleListen, onToggleDemo,
+  onToggleListen, onToggleDemo, onManualLookup,
 }) {
   const [devices, setDevices] = useState([])
   const [loadingDevices, setLoadingDevices] = useState(false)
   const [endpointInput, setEndpointInput] = useState(llmEndpoint || 'http://localhost:1234/v1')
   const [showEndpoint, setShowEndpoint] = useState(false)
   const endpointRef = useRef(null)
+
+  // Keep the endpoint field in step with settings restored after first paint.
+  useEffect(() => {
+    if (llmEndpoint) setEndpointInput(llmEndpoint)
+  }, [llmEndpoint])
 
   useEffect(() => {
     if (!api) return
@@ -53,7 +59,7 @@ export default function Header({
     ? 'LM Studio: checking…'
     : llmOk
       ? `LM Studio: connected${llmStatus.model ? ` (${llmStatus.model})` : ''}`
-      : `LM Studio: not connected — ${llmStatus.error || 'unreachable'}`
+      : `LM Studio: not connected (${llmStatus.error || 'unreachable'})`
 
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-surface-2 border-b border-surface-3 shrink-0 gap-4 flex-wrap">
@@ -70,13 +76,16 @@ export default function Header({
       {/* Controls row */}
       <div className="flex items-center gap-3 flex-wrap">
 
+        {/* Manual reference lookup, available at all times including while listening */}
+        {api && <ManualSearch onLookup={onManualLookup} />}
+
         {/* Whisper model selector */}
         <label className="flex items-center gap-1.5 text-xs text-surface-4">
           <span>Model</span>
           <select
             value={whisperModel}
             onChange={e => onModelChange(e.target.value)}
-            disabled={isListening}
+            disabled={isListening || isStarting}
             className="bg-surface-3 border border-surface-3 text-white text-xs rounded px-2 py-1 focus:outline-none disabled:opacity-50"
           >
             {MODELS.map(m => (
@@ -92,7 +101,7 @@ export default function Header({
             <select
               value={deviceIndex ?? ''}
               onChange={e => onDeviceChange(e.target.value === '' ? null : Number(e.target.value))}
-              disabled={isListening || loadingDevices}
+              disabled={isListening || isStarting || loadingDevices}
               className="bg-surface-3 border border-surface-3 text-white text-xs rounded px-2 py-1 max-w-[200px] focus:outline-none disabled:opacity-50"
             >
               <option value="">System default</option>
@@ -150,7 +159,7 @@ export default function Header({
         {/* Bible DB status badge */}
         {api && (
           <span
-            title={bibleDbReady ? 'KJV Bible database loaded' : 'Bible DB missing — run: node scripts/setup-bible-db.js'}
+            title={bibleDbReady ? 'KJV Bible database loaded' : 'Bible DB missing. Run: npm run setup-bible'}
             className={`text-xs px-2 py-0.5 rounded border ${
               bibleDbReady
                 ? 'border-green-700 text-green-400 bg-green-900/20'
@@ -175,16 +184,30 @@ export default function Header({
           {demoMode ? '⚡ Demo' : 'Demo'}
         </button>
 
-        {/* Start / Stop button */}
+        {/* Start / Stop button. Disabled while the model loads, which can
+            take a minute for large-v3, so a second click cannot restart it. */}
         <button
           onClick={onToggleListen}
+          disabled={isStarting}
+          title={isStarting ? 'Loading the Whisper model…' : isListening ? 'Stop listening (Ctrl+L)' : 'Start listening (Ctrl+L)'}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all
-            ${isListening
-              ? 'bg-red-700 hover:bg-red-600 text-white'
-              : 'bg-brand hover:bg-brand-light text-white'
+            ${isStarting
+              ? 'bg-surface-3 text-surface-4 cursor-wait'
+              : isListening
+                ? 'bg-red-700 hover:bg-red-600 text-white'
+                : 'bg-brand hover:bg-brand-light text-white'
             }`}
         >
-          {isListening ? (
+          {isStarting ? (
+            <>
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Loading…
+            </>
+          ) : isListening ? (
             <>
               <span className="w-2 h-2 rounded-sm bg-white inline-block" />
               Stop
@@ -205,10 +228,14 @@ export default function Header({
       <div className="flex items-center gap-2 shrink-0 ml-auto">
         <div className="relative flex items-center justify-center w-3 h-3">
           {isListening && <span className="pulse-ring absolute inline-flex h-3 w-3 rounded-full bg-high opacity-75" />}
-          <span className={`w-2 h-2 rounded-full ${isListening ? 'bg-high' : 'bg-surface-4'}`} />
+          <span className={`w-2 h-2 rounded-full ${
+            isListening ? 'bg-high' : isStarting ? 'bg-amber-400 animate-pulse' : 'bg-surface-4'
+          }`} />
         </div>
-        <span className={`text-xs ${isListening ? 'text-high' : 'text-surface-4'}`}>
-          {statusMsg || (isListening ? 'LISTENING' : 'IDLE')}
+        <span className={`text-xs ${
+          isListening ? 'text-high' : isStarting ? 'text-amber-400' : 'text-surface-4'
+        }`}>
+          {statusMsg || (isListening ? 'LISTENING' : isStarting ? 'STARTING' : 'IDLE')}
         </span>
       </div>
     </header>

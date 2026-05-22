@@ -94,7 +94,7 @@ export default function SentScreen({ history, onRemove, onClear }) {
         )}
       </div>
 
-      {/* Items list — newest at top */}
+      {/* Items list, newest at top */}
       <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1.5">
         {history.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center gap-2 text-surface-4 py-8">
