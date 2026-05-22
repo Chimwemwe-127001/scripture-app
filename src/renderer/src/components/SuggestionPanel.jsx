@@ -1,10 +1,10 @@
 import ScriptureCard from './ScriptureCard'
 
-export default function SuggestionPanel({ suggestions, onSent, bibleDbReady, llmStatus, onClear }) {
+export default function SuggestionPanel({ suggestions, onSent, onSendToScreen, bibleDbReady, llmStatus, onClear }) {
   // Build contextual hints for the empty state
   const hints = []
-  if (bibleDbReady === false) hints.push({ icon: '📖', msg: 'Bible DB not set up — run npm run setup-bible' })
-  if (llmStatus && !llmStatus.ok) hints.push({ icon: '🤖', msg: 'LM Studio not connected — start it and load Mistral 7B' })
+  if (bibleDbReady === false) hints.push({ icon: '📖', msg: 'Bible DB not set up. Run npm run setup-bible' })
+  if (llmStatus && !llmStatus.ok) hints.push({ icon: '🤖', msg: 'LM Studio not connected. Start it and load Mistral 7B' })
 
   return (
     <div className="flex flex-col flex-1 bg-surface rounded-lg overflow-hidden border border-surface-3">
@@ -55,19 +55,27 @@ export default function SuggestionPanel({ suggestions, onSent, bibleDbReady, llm
             )}
           </div>
         ) : (
-          suggestions.map(s => (
-            <ScriptureCard key={s.id} scripture={s} onSent={onSent} />
+          suggestions.map((s, i) => (
+            <ScriptureCard
+              key={s.id}
+              scripture={s}
+              onSent={onSent}
+              onSendToScreen={onSendToScreen}
+              // Only the first nine are reachable by number key.
+              hotkey={i < 9 ? i + 1 : null}
+            />
           ))
         )}
       </div>
 
       <div className="px-3 py-1.5 border-t border-surface-3 shrink-0">
         <span className="text-xs text-surface-4">
-          Click card to log · <span className="text-white">Send to Screen</span> sends to VideoPsalm
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">1</kbd>–
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">9</kbd> send to screen
+          {' · '}
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">Ctrl+F</kbd> look up
           {' · '}
           <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">Ctrl+L</kbd> listen
-          {' · '}
-          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">Esc</kbd> clear
         </span>
       </div>
     </div>

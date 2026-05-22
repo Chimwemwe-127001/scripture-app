@@ -10,8 +10,12 @@ export default function TranscriptPanel({ segments, isListening, isAnalyzing, ch
   const wordCount = segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0)
 
   function getSegmentHighlight(seg) {
+    // Matches on `seg.at` (arrival time). A segment is highlighted when it
+    // arrived inside a chunk's time window, plus a short grace period.
+    const at = seg.at
+    if (at == null) return null
     for (const h of chunkHighlights) {
-      if (seg.id >= h.startAt && seg.id <= h.fireAt + 1500) return h.color
+      if (at >= h.startAt && at <= h.fireAt + 1500) return h.color
     }
     return null
   }

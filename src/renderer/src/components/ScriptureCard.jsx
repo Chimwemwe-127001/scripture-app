@@ -14,12 +14,23 @@ const TRIGGER_LABELS = {
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false)
-  const copy = (e) => {
+
+  const copy = async (e) => {
     e.stopPropagation()
-    navigator.clipboard.writeText(text).then(() => {
+    try {
+      // Prefer the main-process clipboard over navigator.clipboard. A packaged
+      // build loads from file://, which is not a secure context, so the browser
+      // API may be unavailable there.
+      if (window.electronAPI?.copyToClipboard) {
+        await window.electronAPI.copyToClipboard(text)
+      } else {
+        await navigator.clipboard.writeText(text)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    })
+    } catch {
+      /* copying is a convenience, so a failure is not shown */
+    }
   }
   return (
     <button
@@ -35,27 +46,21 @@ function CopyButton({ text }) {
   )
 }
 
-function SendToScreenBtn({ scripture, onSent }) {
+function SendToScreenBtn({ scripture, onSendToScreen }) {
   const [state, setState] = useState('idle')
   const [errMsg, setErrMsg] = useState('')
 
   const send = async (e) => {
     e.stopPropagation()
     setState('sending')
-    try {
-      const result = await window.electronAPI?.sendToVideoPsalm(scripture.reference)
-      if (result?.ok) {
-        setState('ok')
-        onSent?.(scripture, true)
-        setTimeout(() => setState('idle'), 2000)
-      } else {
-        const msg = result?.error || 'Unknown error'
-        setErrMsg(msg)
-        setState('error')
-        setTimeout(() => setState('idle'), 3000)
-      }
-    } catch (err) {
-      setErrMsg(err.message || 'Failed')
+    // Send goes through the shared App-level handler so the keyboard shortcuts
+    // and this button follow exactly the same path.
+    const result = await onSendToScreen(scripture)
+    if (result?.ok) {
+      setState('ok')
+      setTimeout(() => setState('idle'), 2000)
+    } else {
+      setErrMsg(result?.error || 'Unknown error')
       setState('error')
       setTimeout(() => setState('idle'), 3000)
     }
@@ -85,7 +90,7 @@ function SendToScreenBtn({ scripture, onSent }) {
   )
 }
 
-export default function ScriptureCard({ scripture, onSent }) {
+export default function ScriptureCard({ scripture, onSent, onSendToScreen, hotkey }) {
   const conf = CONFIDENCE_STYLES[scripture.confidence] || CONFIDENCE_STYLES.low
   const copyText = `${scripture.reference} (${scripture.translation})\n"${scripture.text}"`
   const chunkColor = scripture.chunkColor
@@ -103,11 +108,28 @@ export default function ScriptureCard({ scripture, onSent }) {
       title="Click to log to history"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div>
-          <span className="text-brand-light font-semibold text-sm group-hover:text-white transition-colors">
-            {scripture.reference}
-          </span>
-          <span className="ml-2 text-surface-4 text-xs">{scripture.translation}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Hotkey badge: shows which number key sends this card */}
+          {hotkey && (
+            <kbd
+              title={`Press ${hotkey} to send this to VideoPsalm`}
+              className="shrink-0 w-4 h-4 flex items-center justify-center rounded bg-surface-3
+                         text-surface-4 text-[10px] font-mono border border-surface-3"
+            >
+              {hotkey}
+            </kbd>
+          )}
+          <div className="min-w-0">
+            <span className="text-brand-light font-semibold text-sm group-hover:text-white transition-colors">
+              {scripture.reference}
+            </span>
+            <span className="ml-2 text-surface-4 text-xs">{scripture.translation}</span>
+            {scripture.manual && (
+              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-brand/40 text-brand-light">
+                manual
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <CopyButton text={copyText} />
@@ -126,7 +148,7 @@ export default function ScriptureCard({ scripture, onSent }) {
         <span className="text-surface-4 text-xs italic shrink-0">
           {TRIGGER_LABELS[scripture.trigger] || scripture.trigger}
         </span>
-        <SendToScreenBtn scripture={scripture} onSent={onSent} />
+        <SendToScreenBtn scripture={scripture} onSendToScreen={onSendToScreen} />
       </div>
     </div>
   )
