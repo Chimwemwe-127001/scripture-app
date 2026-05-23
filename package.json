@@ -1,12 +1,15 @@
 {
   "name": "scripture-app",
   "version": "1.0.0",
-  "description": "Real-Time Audio-to-Scripture Application for church media operators",
+  "description": "Real-time speech-to-scripture assistant for church media operators",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "test": "node scripts/selftest.js",
+    "eval": "node scripts/evaluate.js",
+    "screenshots": "electron-vite build && electron scripts/capture-screenshots.js",
     "setup-bible": "node scripts/setup-bible-db.js",
     "dist": "electron-vite build && electron-builder",
     "dist:win": "electron-vite build && electron-builder --win"
@@ -15,8 +18,17 @@
     "type": "git",
     "url": "git+https://github.com/Chimwemwe-127001/scripture-app.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "electron",
+    "react",
+    "whisper",
+    "speech-to-text",
+    "llm",
+    "bible",
+    "church-media",
+    "videopsalm"
+  ],
+  "author": "Sinyinza Chimwemwe",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
@@ -26,9 +38,11 @@
   "build": {
     "appId": "com.col.scripture-app",
     "productName": "Scripture Suggestion Panel",
-    "copyright": "Copyright © 2025",
+    "copyright": "Copyright © 2026 Sinyinza Chimwemwe",
     "asar": true,
-    "asarUnpack": ["**/node_modules/sql.js/dist/**"],
+    "asarUnpack": [
+      "**/node_modules/sql.js/dist/**"
+    ],
     "directories": {
       "output": "dist-electron",
       "buildResources": "resources"
@@ -40,12 +54,26 @@
       "!**/bible-data/**"
     ],
     "extraResources": [
-      { "from": "python/", "to": "python/" },
-      { "from": "bible-data/", "to": "bible-data/", "filter": ["**/*.db"] }
+      {
+        "from": "python/",
+        "to": "python/"
+      },
+      {
+        "from": "bible-data/",
+        "to": "bible-data/",
+        "filter": [
+          "**/*.db"
+        ]
+      }
     ],
     "win": {
       "target": [
-        { "target": "zip", "arch": ["x64"] }
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "resources/icon.ico",
       "forceCodeSigning": false
