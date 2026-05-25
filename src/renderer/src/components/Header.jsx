@@ -1,36 +1,241 @@
-export default function Header({ isListening }) {
+import { useEffect, useState, useRef } from 'react'
+import ManualSearch from './ManualSearch'
+
+const MODELS = [
+  { value: 'tiny',     label: 'tiny (~75 MB)' },
+  { value: 'base',     label: 'base (~140 MB)' },
+  { value: 'small',    label: 'small (~460 MB)' },
+  { value: 'medium',   label: 'medium (~1.5 GB)' },
+  { value: 'large-v3', label: 'large-v3 (~3 GB)' },
+]
+
+const api = window.electronAPI
+
+export default function Header({
+  isListening, isStarting, statusMsg, errorMsg, demoMode,
+  whisperModel, deviceIndex,
+  llmStatus, llmEndpoint, bibleDbReady, vpStatus,
+  onModelChange, onDeviceChange, onEndpointChange,
+  onToggleListen, onToggleDemo, onManualLookup,
+}) {
+  const [devices, setDevices] = useState([])
+  const [loadingDevices, setLoadingDevices] = useState(false)
+  const [endpointInput, setEndpointInput] = useState(llmEndpoint || 'http://localhost:1234/v1')
+  const [showEndpoint, setShowEndpoint] = useState(false)
+  const endpointRef = useRef(null)
+
+  // Keep the endpoint field in step with settings restored after first paint.
+  useEffect(() => {
+    if (llmEndpoint) setEndpointInput(llmEndpoint)
+  }, [llmEndpoint])
+
+  useEffect(() => {
+    if (!api) return
+    setLoadingDevices(true)
+    api.getAudioDevices().then(result => {
+      if (Array.isArray(result)) {
+        setDevices(result)
+        // If the currently selected device is no longer in the list (e.g. it was a
+        // WASAPI loopback device that was filtered out), reset to system default.
+        if (deviceIndex != null && !result.some(d => d.index === deviceIndex)) {
+          onDeviceChange(null)
+        }
+      }
+      setLoadingDevices(false)
+    })
+  }, [])
+
+  function handleEndpointSubmit(e) {
+    e.preventDefault()
+    onEndpointChange?.(endpointInput.trim())
+    setShowEndpoint(false)
+  }
+
+  const llmOk = llmStatus?.ok === true
+  const llmDot = llmStatus === null
+    ? 'bg-surface-4'
+    : llmOk ? 'bg-green-400' : 'bg-red-500'
+  const llmTip = llmStatus === null
+    ? 'LM Studio: checking…'
+    : llmOk
+      ? `LM Studio: connected${llmStatus.model ? ` (${llmStatus.model})` : ''}`
+      : `LM Studio: not connected (${llmStatus.error || 'unreachable'})`
+
   return (
-    <header className="flex items-center justify-between px-4 py-2 bg-surface-2 border-b border-surface-3 shrink-0">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-brand flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
-            </svg>
-          </div>
-          <span className="font-semibold text-white text-sm tracking-wide">Scripture Suggestion Panel</span>
+    <header className="flex items-center justify-between px-4 py-2 bg-surface-2 border-b border-surface-3 shrink-0 gap-4 flex-wrap">
+      {/* Logo + title */}
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="w-7 h-7 rounded bg-brand flex items-center justify-center">
+          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+          </svg>
         </div>
-        <span className="text-surface-4 text-xs hidden sm:inline">v1.0 — Phase 1 UI Prototype</span>
+        <span className="font-semibold text-white text-sm tracking-wide">Scripture Suggestion Panel</span>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <div className="relative flex items-center justify-center w-3 h-3">
-            {isListening && (
-              <span className="pulse-ring absolute inline-flex h-3 w-3 rounded-full bg-high opacity-75" />
-            )}
-            <span className={`w-2 h-2 rounded-full ${isListening ? 'bg-high' : 'bg-surface-4'}`} />
-          </div>
-          <span className={`text-xs font-medium ${isListening ? 'text-high' : 'text-surface-4'}`}>
-            {isListening ? 'LISTENING' : 'IDLE'}
-          </span>
-        </div>
+      {/* Controls row */}
+      <div className="flex items-center gap-3 flex-wrap">
 
-        <span className="text-surface-4 text-xs">
-          Whisper: <span className="text-white">small</span>
-        </span>
-        <span className="text-surface-4 text-xs">
-          LLM: <span className="text-white">mistral:7b</span>
+        {/* Manual reference lookup, available at all times including while listening */}
+        {api && <ManualSearch onLookup={onManualLookup} />}
+
+        {/* Whisper model selector */}
+        <label className="flex items-center gap-1.5 text-xs text-surface-4">
+          <span>Model</span>
+          <select
+            value={whisperModel}
+            onChange={e => onModelChange(e.target.value)}
+            disabled={isListening || isStarting}
+            className="bg-surface-3 border border-surface-3 text-white text-xs rounded px-2 py-1 focus:outline-none disabled:opacity-50"
+          >
+            {MODELS.map(m => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </label>
+
+        {/* Audio device selector */}
+        {api && (
+          <label className="flex items-center gap-1.5 text-xs text-surface-4">
+            <span>Input</span>
+            <select
+              value={deviceIndex ?? ''}
+              onChange={e => onDeviceChange(e.target.value === '' ? null : Number(e.target.value))}
+              disabled={isListening || isStarting || loadingDevices}
+              className="bg-surface-3 border border-surface-3 text-white text-xs rounded px-2 py-1 max-w-[200px] focus:outline-none disabled:opacity-50"
+            >
+              <option value="">System default</option>
+              {devices.map(d => (
+                <option key={d.index} value={d.index}>{d.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {/* VP status */}
+        {api && (
+          <div className="flex items-center gap-1 text-xs text-surface-4" title={vpStatus ? 'VideoPsalm is running' : 'VideoPsalm not detected'}>
+            <span className={`w-2 h-2 rounded-full transition-colors ${vpStatus ? 'bg-green-400' : 'bg-surface-4'}`} />
+            <span>VideoPsalm</span>
+          </div>
+        )}
+
+        {/* LM Studio endpoint + status */}
+        {api && (
+          <div className="flex items-center gap-1.5 relative">
+            <button
+              title={llmTip}
+              onClick={() => setShowEndpoint(v => !v)}
+              className="flex items-center gap-1 text-xs text-surface-4 hover:text-white transition-colors"
+            >
+              <span className={`w-2 h-2 rounded-full ${llmDot} transition-colors`} />
+              <span>LM Studio</span>
+            </button>
+            {showEndpoint && (
+              <form
+                onSubmit={handleEndpointSubmit}
+                className="absolute top-7 left-0 z-50 bg-surface-2 border border-surface-3 rounded shadow-lg p-2 flex gap-2 items-center min-w-[320px]"
+              >
+                <input
+                  ref={endpointRef}
+                  autoFocus
+                  type="text"
+                  value={endpointInput}
+                  onChange={e => setEndpointInput(e.target.value)}
+                  placeholder="http://localhost:1234/v1"
+                  className="flex-1 bg-surface-3 border border-surface-3 text-white text-xs rounded px-2 py-1 focus:outline-none focus:border-brand"
+                />
+                <button
+                  type="submit"
+                  className="bg-brand hover:bg-brand-light text-white text-xs px-2 py-1 rounded"
+                >
+                  Save
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* Bible DB status badge */}
+        {api && (
+          <span
+            title={bibleDbReady ? 'KJV Bible database loaded' : 'Bible DB missing. Run: npm run setup-bible'}
+            className={`text-xs px-2 py-0.5 rounded border ${
+              bibleDbReady
+                ? 'border-green-700 text-green-400 bg-green-900/20'
+                : 'border-amber-700 text-amber-400 bg-amber-900/20'
+            }`}
+          >
+            {bibleDbReady ? '📖 KJV' : '⚠ No Bible DB'}
+          </span>
+        )}
+
+        {/* Demo mode toggle */}
+        <button
+          onClick={onToggleDemo}
+          disabled={isListening && !demoMode}
+          title={demoMode ? 'Exit demo mode' : 'Run with simulated audio (no mic required)'}
+          className={`text-xs px-2 py-1 rounded border transition-colors
+            ${demoMode
+              ? 'bg-amber-700/40 border-amber-600 text-amber-300'
+              : 'border-surface-3 text-surface-4 hover:text-white hover:border-surface-4'
+            } disabled:opacity-30`}
+        >
+          {demoMode ? '⚡ Demo' : 'Demo'}
+        </button>
+
+        {/* Start / Stop button. Disabled while the model loads, which can
+            take a minute for large-v3, so a second click cannot restart it. */}
+        <button
+          onClick={onToggleListen}
+          disabled={isStarting}
+          title={isStarting ? 'Loading the Whisper model…' : isListening ? 'Stop listening (Ctrl+L)' : 'Start listening (Ctrl+L)'}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all
+            ${isStarting
+              ? 'bg-surface-3 text-surface-4 cursor-wait'
+              : isListening
+                ? 'bg-red-700 hover:bg-red-600 text-white'
+                : 'bg-brand hover:bg-brand-light text-white'
+            }`}
+        >
+          {isStarting ? (
+            <>
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Loading…
+            </>
+          ) : isListening ? (
+            <>
+              <span className="w-2 h-2 rounded-sm bg-white inline-block" />
+              Stop
+            </>
+          ) : (
+            <>
+              <span className="relative flex w-2 h-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-50" />
+                <span className="w-2 h-2 rounded-full bg-white inline-block" />
+              </span>
+              Listen
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Status indicator */}
+      <div className="flex items-center gap-2 shrink-0 ml-auto">
+        <div className="relative flex items-center justify-center w-3 h-3">
+          {isListening && <span className="pulse-ring absolute inline-flex h-3 w-3 rounded-full bg-high opacity-75" />}
+          <span className={`w-2 h-2 rounded-full ${
+            isListening ? 'bg-high' : isStarting ? 'bg-amber-400 animate-pulse' : 'bg-surface-4'
+          }`} />
+        </div>
+        <span className={`text-xs ${
+          isListening ? 'text-high' : isStarting ? 'text-amber-400' : 'text-surface-4'
+        }`}>
+          {statusMsg || (isListening ? 'LISTENING' : isStarting ? 'STARTING' : 'IDLE')}
         </span>
       </div>
     </header>

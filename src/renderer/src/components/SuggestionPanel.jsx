@@ -1,6 +1,11 @@
 import ScriptureCard from './ScriptureCard'
 
-export default function SuggestionPanel({ suggestions, onSelect }) {
+export default function SuggestionPanel({ suggestions, onSent, onSendToScreen, bibleDbReady, llmStatus, onClear }) {
+  // Build contextual hints for the empty state
+  const hints = []
+  if (bibleDbReady === false) hints.push({ icon: '📖', msg: 'Bible DB not set up. Run npm run setup-bible' })
+  if (llmStatus && !llmStatus.ok) hints.push({ icon: '🤖', msg: 'LM Studio not connected. Start it and load Mistral 7B' })
+
   return (
     <div className="flex flex-col flex-1 bg-surface rounded-lg overflow-hidden border border-surface-3">
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-3 shrink-0">
@@ -12,9 +17,18 @@ export default function SuggestionPanel({ suggestions, onSelect }) {
           <span className="text-xs font-semibold text-surface-4 uppercase tracking-wider">Suggestions</span>
         </div>
         {suggestions.length > 0 && (
-          <span className="bg-brand text-white text-xs font-bold px-2 py-0.5 rounded-full">
-            {suggestions.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="bg-brand text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {suggestions.length}
+            </span>
+            <button
+              onClick={onClear}
+              title="Clear all suggestions"
+              className="text-xs text-surface-4 hover:text-red-400 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
         )}
       </div>
 
@@ -29,17 +43,39 @@ export default function SuggestionPanel({ suggestions, onSelect }) {
               <p className="text-sm font-medium opacity-40">Waiting for scripture matches…</p>
               <p className="text-xs opacity-30 mt-1">Suggestions appear as the pastor speaks</p>
             </div>
+            {hints.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1.5 w-full max-w-xs">
+                {hints.map((h, i) => (
+                  <div key={i} className="flex items-start gap-2 text-left bg-surface-2 border border-surface-3 rounded px-2.5 py-2">
+                    <span className="text-base leading-none mt-0.5">{h.icon}</span>
+                    <span className="text-xs text-surface-4 leading-snug">{h.msg}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
-          suggestions.map(s => (
-            <ScriptureCard key={s.id} scripture={s} onSelect={onSelect} />
+          suggestions.map((s, i) => (
+            <ScriptureCard
+              key={s.id}
+              scripture={s}
+              onSent={onSent}
+              onSendToScreen={onSendToScreen}
+              // Only the first nine are reachable by number key.
+              hotkey={i < 9 ? i + 1 : null}
+            />
           ))
         )}
       </div>
 
       <div className="px-3 py-1.5 border-t border-surface-3 shrink-0">
         <span className="text-xs text-surface-4">
-          Click a card to add it to the <span className="text-white">selected queue</span>
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">1</kbd>–
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">9</kbd> send to screen
+          {' · '}
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">Ctrl+F</kbd> look up
+          {' · '}
+          <kbd className="px-1 py-0.5 bg-surface-3 rounded text-xs font-mono">Ctrl+L</kbd> listen
         </span>
       </div>
     </div>

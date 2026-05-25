@@ -1,5 +1,31 @@
+# Dependencies
 node_modules/
+
+# Build output
 out/
 dist/
-.DS_Store
+dist-electron/
+
+# Temporary files written by electron-vite when it bundles the config
+electron.vite.config.*.mjs
+
+# Bible database, generated locally with `npm run setup-bible`.
+# It is about 5.6 MB and fully reproducible, so it stays out of git.
+bible-data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs
 *.log
+logs/
+
+# OS / editor / local tooling
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/

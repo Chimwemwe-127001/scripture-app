@@ -1,0 +1,9 @@
+# Speech-to-text
+openai-whisper
+sounddevice
+numpy
+
+# VideoPsalm bridge (Windows only): win32gui, psutil and pywinauto.
+pywin32 ; sys_platform == 'win32'
+pywinauto ; sys_platform == 'win32'
+psutil ; sys_platform == 'win32'

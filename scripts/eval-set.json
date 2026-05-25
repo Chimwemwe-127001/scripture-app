@@ -1,0 +1,76 @@
+{
+  "description": "Hand-labelled sermon utterances written in the style of Whisper output. 'refs' is the gold standard: every reference a human operator would expect to see. Hard cases are included on purpose so the scores reflect real weaknesses.",
+  "items": [
+    { "category": "colon",        "text": "turn with me to John 3:16", "refs": ["John 3:16"] },
+    { "category": "colon",        "text": "open your bibles to Romans 8:28", "refs": ["Romans 8:28"] },
+    { "category": "colon",        "text": "Philippians 4:13 says I can do all things through Christ", "refs": ["Philippians 4:13"] },
+    { "category": "colon",        "text": "we read in Genesis 1:1 in the beginning God created", "refs": ["Genesis 1:1"] },
+    { "category": "colon",        "text": "Psalm 23:1 the Lord is my shepherd", "refs": ["Psalms 23:1"] },
+    { "category": "colon",        "text": "Jeremiah 29:11 for I know the plans I have for you", "refs": ["Jeremiah 29:11"] },
+    { "category": "colon",        "text": "Hebrews 11:1 now faith is the substance of things hoped for", "refs": ["Hebrews 11:1"] },
+    { "category": "colon",        "text": "Acts 2:38 repent and be baptized every one of you", "refs": ["Acts 2:38"] },
+    { "category": "colon",        "text": "Mark 16:15 go ye into all the world", "refs": ["Mark 16:15"] },
+    { "category": "colon",        "text": "James 1:5 if any of you lack wisdom let him ask of God", "refs": ["James 1:5"] },
+    { "category": "colon",        "text": "the Song of Solomon 2:4 his banner over me was love", "refs": ["Song of Solomon 2:4"] },
+    { "category": "colon",        "text": "Esther 4:14 for such a time as this", "refs": ["Esther 4:14"] },
+
+    { "category": "spoken verse", "text": "First Corinthians 13 verse 4 love is patient", "refs": ["1 Corinthians 13:4"] },
+    { "category": "spoken verse", "text": "John chapter 14 verse 6 I am the way the truth and the life", "refs": ["John 14:6"] },
+    { "category": "spoken verse", "text": "Isaiah 40 verse 31 they that wait upon the Lord", "refs": ["Isaiah 40:31"] },
+    { "category": "spoken verse", "text": "let us go to Matthew chapter 5 verse 9", "refs": ["Matthew 5:9"] },
+    { "category": "spoken verse", "text": "Habakkuk 2 verse 3 the vision is yet for an appointed time", "refs": ["Habakkuk 2:3"] },
+    { "category": "spoken verse", "text": "Ephesians 2 verses 8 and 9 by grace are ye saved", "refs": ["Ephesians 2:8-9"] },
+
+    { "category": "numbered book", "text": "second Timothy 3:16 all scripture is given by inspiration", "refs": ["2 Timothy 3:16"] },
+    { "category": "numbered book", "text": "first John 1:9 if we confess our sins", "refs": ["1 John 1:9"] },
+    { "category": "numbered book", "text": "2nd Corinthians 5:17 if any man be in Christ", "refs": ["2 Corinthians 5:17"] },
+    { "category": "numbered book", "text": "1st Peter 5:7 casting all your care upon him", "refs": ["1 Peter 5:7"] },
+    { "category": "numbered book", "text": "1 Samuel 17:45 then said David to the Philistine", "refs": ["1 Samuel 17:45"] },
+    { "category": "numbered book", "text": "Second Kings 6:17 Lord open his eyes", "refs": ["2 Kings 6:17"] },
+    { "category": "numbered book", "text": "II Chronicles 7:14 if my people which are called by my name", "refs": ["2 Chronicles 7:14"] },
+    { "category": "numbered book", "text": "I Thessalonians 5:17 pray without ceasing", "refs": ["1 Thessalonians 5:17"] },
+
+    { "category": "missing colon", "text": "Romans 12 2 be not conformed to this world", "refs": ["Romans 12:2"] },
+    { "category": "missing colon", "text": "Joshua 1 9 be strong and of a good courage", "refs": ["Joshua 1:9"] },
+    { "category": "missing colon", "text": "Micah 6 8 what doth the Lord require of thee", "refs": ["Micah 6:8"] },
+    { "category": "missing colon", "text": "Proverbs 3 5 trust in the Lord with all thine heart", "refs": ["Proverbs 3:5"] },
+
+    { "category": "range",        "text": "Romans 8:28-30 and we know that all things work together", "refs": ["Romans 8:28-30"] },
+    { "category": "range",        "text": "Galatians 5:22 to 23 the fruit of the Spirit", "refs": ["Galatians 5:22-23"] },
+    { "category": "range",        "text": "Matthew 6:9 through 13 the Lord's prayer", "refs": ["Matthew 6:9-13"] },
+    { "category": "range",        "text": "Psalm 91:1-2 he that dwelleth in the secret place", "refs": ["Psalms 91:1-2"] },
+    { "category": "range",        "text": "Lamentations 3:22 to 23 his mercies are new every morning", "refs": ["Lamentations 3:22-23"] },
+    { "category": "range",        "text": "look at Proverbs 3:5 and 6 together", "refs": ["Proverbs 3:5-6"] },
+
+    { "category": "multiple",     "text": "John 3:16 and Romans 5:8 both show his love", "refs": ["John 3:16", "Romans 5:8"] },
+    { "category": "multiple",     "text": "compare Isaiah 53:5 with 1 Peter 2:24", "refs": ["Isaiah 53:5", "1 Peter 2:24"] },
+
+    { "category": "abbreviation", "text": "Rev 21:4 God shall wipe away all tears", "refs": ["Revelation 21:4"] },
+    { "category": "abbreviation", "text": "Gen 50:20 ye thought evil against me", "refs": ["Genesis 50:20"] },
+    { "category": "abbreviation", "text": "Deut 31:6 be strong and of a good courage", "refs": ["Deuteronomy 31:6"] },
+
+    { "category": "bare chapter", "text": "let us read Psalm 23 together", "refs": ["Psalms 23"] },
+    { "category": "bare chapter", "text": "Hebrews 11 is the great faith chapter", "refs": ["Hebrews 11"] },
+    { "category": "bare chapter", "text": "turn to first Corinthians 13", "refs": ["1 Corinthians 13"] },
+
+    { "category": "hard",         "text": "John three sixteen", "refs": ["John 3:16"] },
+    { "category": "hard",         "text": "Romans chapter eight verse one there is therefore now no condemnation", "refs": ["Romans 8:1"] },
+    { "category": "hard",         "text": "John 3.16 for God so loved the world", "refs": ["John 3:16"] },
+    { "category": "hard",         "text": "Jude verse 24 now unto him that is able", "refs": ["Jude 1:24"] },
+
+    { "category": "negative",     "text": "I want to mark 3 things this morning", "refs": [] },
+    { "category": "negative",     "text": "he lost his job 12 years ago", "refs": [] },
+    { "category": "negative",     "text": "we want to be an acts 2 church", "refs": [] },
+    { "category": "negative",     "text": "the service starts at 10:30 and ends at 12", "refs": [] },
+    { "category": "negative",     "text": "in 2024 we had 45 baptisms", "refs": [] },
+    { "category": "negative",     "text": "James 5 minutes ago told me the news", "refs": [] },
+    { "category": "negative",     "text": "our pastor John 3 years ago started this ministry", "refs": [] },
+    { "category": "negative",     "text": "numbers 4 5 and 6 are on the board", "refs": [] },
+    { "category": "negative",     "text": "please call Daniel 4 times before noon", "refs": [] },
+    { "category": "negative",     "text": "the prophet Isaiah 700 years before Christ", "refs": [] },
+    { "category": "negative",     "text": "the first 3 rows please stand", "refs": [] },
+    { "category": "negative",     "text": "chapter 4 of the handbook covers safety", "refs": [] },
+    { "category": "negative",     "text": "the kids in grade 7 will lead worship", "refs": [] },
+    { "category": "negative",     "text": "a revelation came to me at 9 in the evening", "refs": [] }
+  ]
+}
