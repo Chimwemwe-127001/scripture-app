@@ -12,11 +12,11 @@ const MODELS = [
 const api = window.electronAPI
 
 export default function Header({
-  isListening, isStarting, statusMsg, errorMsg, demoMode,
+  isListening, isStarting, statusMsg, errorMsg,
   whisperModel, deviceIndex,
   llmStatus, llmEndpoint, bibleDbReady, vpStatus,
   onModelChange, onDeviceChange, onEndpointChange,
-  onToggleListen, onToggleDemo, onManualLookup,
+  onToggleListen, onManualLookup,
 }) {
   const [devices, setDevices] = useState([])
   const [loadingDevices, setLoadingDevices] = useState(false)
@@ -169,20 +169,6 @@ export default function Header({
             {bibleDbReady ? '📖 KJV' : '⚠ No Bible DB'}
           </span>
         )}
-
-        {/* Demo mode toggle */}
-        <button
-          onClick={onToggleDemo}
-          disabled={isListening && !demoMode}
-          title={demoMode ? 'Exit demo mode' : 'Run with simulated audio (no mic required)'}
-          className={`text-xs px-2 py-1 rounded border transition-colors
-            ${demoMode
-              ? 'bg-amber-700/40 border-amber-600 text-amber-300'
-              : 'border-surface-3 text-surface-4 hover:text-white hover:border-surface-4'
-            } disabled:opacity-30`}
-        >
-          {demoMode ? '⚡ Demo' : 'Demo'}
-        </button>
 
         {/* Start / Stop button. Disabled while the model loads, which can
             take a minute for large-v3, so a second click cannot restart it. */}
