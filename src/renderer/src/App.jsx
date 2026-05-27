@@ -3,7 +3,6 @@ import Header from './components/Header'
 import TranscriptPanel from './components/TranscriptPanel'
 import SuggestionPanel from './components/SuggestionPanel'
 import SentScreen from './components/SelectedQueue'
-import { SERMON_EXCERPT, MOCK_SCRIPTURES } from './data/mockData'
 
 const SUGGESTION_MAX  = 10
 const SUGGESTION_TTL_MS = 5 * 60 * 1000  // 5 minutes
@@ -22,7 +21,7 @@ const CHUNK_COLORS = [
 // anything the detection produced.
 const MANUAL_COLOR = { bg: 'rgba(148,163,184,0.15)', border: '#94a3b8', text: '#cbd5e1' }
 
-const api = window.electronAPI   // undefined in browser-only dev
+const api = window.electronAPI   // undefined outside Electron
 
 export default function App() {
   const [segments, setSegments]         = useState([])   // transcript segments
@@ -36,7 +35,6 @@ export default function App() {
   const [statusMsg, setStatusMsg]       = useState('')
   const [errorMsg, setErrorMsg]         = useState('')
   const [toast, setToast]               = useState('')
-  const [demoMode, setDemoMode]         = useState(!api)  // auto-demo when no Electron API
 
   // Chunk analysis state for transcript highlighting + analyzing indicator
   const [analyzingChunks, setAnalyzingChunks] = useState([])   // [{chunkId, startAt, fireAt}]
@@ -53,9 +51,6 @@ export default function App() {
   // Selected whisper model + audio device (controlled from Header)
   const [whisperModel, setWhisperModel]   = useState('small')
   const [deviceIndex, setDeviceIndex]     = useState(null)
-
-  const demoWordIdxRef  = useRef(0)
-  const demoTimersRef   = useRef([])
 
   // Strictly increasing segment ids, unique even within one millisecond.
   const segmentSeqRef = useRef(0)
@@ -116,85 +111,10 @@ export default function App() {
   }, [])
 
   // ------------------------------------------------------------------
-  // Demo mode: simulates the transcript and suggestions with mock data
-  // ------------------------------------------------------------------
-  function startDemoMode() {
-    stopDemoTimers()
-    setSegments([])
-    setSuggestions([])
-    setChunkHighlights([])
-    setAnalyzingChunks([])
-    demoWordIdxRef.current = 0
-    setIsListening(true)
-    setStatusMsg('Demo mode: simulated transcript')
-
-    // Like the real pipeline, a suggestion appears only after the words that
-    // cite it have been transcribed, and it highlights the segments holding
-    // its cue phrase. A fixed timer would drift away from the text.
-    let wordBuf  = []
-    let spoken   = ''   // lower-case transcript shown so far
-    const shown  = []   // one entry per segment: { at, end } where end is its offset in `spoken`
-    let nextCue  = 0
-
-    const showSegment = (text) => {
-      const seg = makeSegment(text)
-      spoken += (spoken ? ' ' : '') + text.toLowerCase()
-      shown.push({ at: seg.at, end: spoken.length })
-      setSegments(prev => [...prev, seg])
-
-      // Fire every suggestion whose cue is now fully in the transcript, in order.
-      while (nextCue < MOCK_SCRIPTURES.length) {
-        const scripture = MOCK_SCRIPTURES[nextCue]
-        const pos = spoken.indexOf(scripture.cue.toLowerCase())
-        if (pos === -1) break
-
-        const idx     = nextCue++
-        const color   = CHUNK_COLORS[idx % CHUNK_COLORS.length]
-        const chunkId = idx + 1
-        const startAt = shown.find(s => s.end > pos).at   // segment where the cue begins
-        const fireAt  = seg.at                            // segment where the cue ends
-
-        setChunkHighlights(prev => [...prev, { chunkId, startAt, fireAt, color, addedAt: fireAt }])
-        setSuggestions(prev => [
-          { ...scripture, addedAt: fireAt, chunkId, chunkColor: color, startAt, fireAt },
-          ...prev,
-        ].slice(0, SUGGESTION_MAX))
-      }
-    }
-
-    const wordTimer = setInterval(() => {
-      const idx = demoWordIdxRef.current
-      if (idx < SERMON_EXCERPT.length) {
-        const n = Math.floor(Math.random() * 2) + 2
-        wordBuf.push(...SERMON_EXCERPT.slice(idx, idx + n))
-        demoWordIdxRef.current += n
-      }
-
-      const finished = demoWordIdxRef.current >= SERMON_EXCERPT.length
-      if (wordBuf.length >= 12 || (finished && wordBuf.length > 0)) {
-        showSegment(wordBuf.join(' '))
-        wordBuf = []
-      }
-      if (finished) {
-        clearInterval(wordTimer)
-        setIsListening(false)
-      }
-    }, 700)
-    demoTimersRef.current.push(wordTimer)
-  }
-
-  function stopDemoTimers() {
-    demoTimersRef.current.forEach(t =>
-      typeof t === 'number' ? clearTimeout(t) : clearInterval(t)
-    )
-    demoTimersRef.current = []
-  }
-
-  // ------------------------------------------------------------------
-  // Real IPC mode
+  // Listening
   // ------------------------------------------------------------------
   async function handleStartListening() {
-    if (!api) { startDemoMode(); return }
+    if (!api) return
     if (isStarting || isListening) return   // guard against a double click
     setErrorMsg('')
     setSuggestions([])
@@ -211,7 +131,7 @@ export default function App() {
   }
 
   async function handleStopListening() {
-    if (!api) { stopDemoTimers(); setIsListening(false); setStatusMsg(''); return }
+    if (!api) return
     setIsStarting(false)
     await api.stopListening()
   }
@@ -326,12 +246,6 @@ export default function App() {
     }
   }, [])
 
-  // Auto-start demo mode when running without Electron
-  useEffect(() => {
-    if (demoMode) startDemoMode()
-    return stopDemoTimers
-  }, [demoMode])
-
   // ------------------------------------------------------------------
   // Keyboard shortcuts
   // ------------------------------------------------------------------
@@ -343,13 +257,6 @@ export default function App() {
         e.preventDefault()
         if (isListening) handleStopListening()
         else handleStartListening()
-        return
-      }
-
-      if (e.ctrlKey && e.key === 'd') {
-        e.preventDefault()
-        if (!demoMode) { setDemoMode(true) }
-        else { stopDemoTimers(); setIsListening(false); setDemoMode(false); setSegments([]) }
         return
       }
 
@@ -379,7 +286,7 @@ export default function App() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [isListening, demoMode, suggestions, errorMsg, toast])
+  }, [isListening, suggestions, errorMsg, toast])
 
   // ------------------------------------------------------------------
   // LLM auto-retry: poll every 30s when LLM is disconnected
@@ -433,7 +340,6 @@ export default function App() {
         onManualLookup={handleManualLookup}
         statusMsg={statusMsg}
         errorMsg={errorMsg}
-        demoMode={demoMode}
         whisperModel={whisperModel}
         deviceIndex={deviceIndex}
         llmStatus={llmStatus}
@@ -444,10 +350,6 @@ export default function App() {
         onDeviceChange={setDeviceIndex}
         onEndpointChange={handleEndpointChange}
         onToggleListen={isListening ? handleStopListening : handleStartListening}
-        onToggleDemo={() => {
-          if (!demoMode) { setDemoMode(true) }
-          else { stopDemoTimers(); setIsListening(false); setDemoMode(false); setSegments([]) }
-        }}
       />
       {errorMsg && (
         <div className="mx-2 mt-1 px-3 py-2 bg-red-900/40 border border-red-700 rounded text-red-300 text-xs flex items-center justify-between">
@@ -459,6 +361,11 @@ export default function App() {
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-md
                         bg-surface-2 border border-brand/50 text-white text-xs shadow-lg">
           {toast}
+        </div>
+      )}
+      {!api && (
+        <div className="mx-2 mt-2 px-3 py-2 border border-surface-3 rounded text-surface-4 text-xs">
+          The desktop bridge is not available. Start the app with npm run dev.
         </div>
       )}
       <div className="flex flex-1 overflow-hidden gap-2 p-2">
