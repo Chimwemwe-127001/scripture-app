@@ -151,6 +151,7 @@ async function lookupVerse(ref) {
       text:        lines.join(' '),
       confidence:  ref.confidence  || 'medium',
       trigger:     ref.trigger     || 'allusion',
+      heard:       ref.heard       || null,   // transcript text that matched, regex path only
       translation: 'KJV',
     }
   } catch (err) {
