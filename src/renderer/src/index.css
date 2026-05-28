@@ -1,9 +1,46 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens for the operator console.
+ *
+ * A neutral charcoal ramp (no blue tint) so the panel sits quietly next to
+ * presentation software in a dim booth. One amber accent marks what is next
+ * and where focus is. Red is reserved for "on screen", the one state that is
+ * live in front of the congregation. See docs/design.md for contrast ratios.
+ */
 @theme {
+  /* Surfaces, darkest to lightest */
+  --color-ink-0: #0d0e10;      /* app background, gutters */
+  --color-ink-1: #141518;      /* panels */
+  --color-ink-2: #1b1d21;      /* raised: inputs, hover, selected row */
+  --color-ink-3: #25282d;      /* pressed, strong hover */
+  --color-line: #2a2d33;       /* hairlines between regions */
+  --color-line-strong: #3b3f46;
+
+  /* Text */
+  --color-fg: #ecebe7;         /* primary: references, verse text */
+  --color-fg-2: #b9b6ae;       /* secondary: transcript, labels */
+  --color-fg-3: #8d8a83;       /* muted: meta, hints */
+
+  /* Meaning */
+  --color-accent: #e3a646;     /* next up, focus, primary action */
+  --color-accent-ink: #1c1406; /* text on accent */
+  --color-live: #e5484d;       /* on screen now */
+  --color-ok: #62b88c;
+  --color-warn: #e3a646;
+  --color-err: #ef6b6f;
+
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  --font-serif: "Source Serif 4", Georgia, serif;
+
+  --radius-sm: 3px;
+  --radius-md: 4px;
+
+  /* Legacy names used by components not yet restyled. Removed once all
+     components use the tokens above. */
   --color-brand: #2C5F8A;
   --color-brand-light: #3a7ab5;
-  --color-brand-dim: #1e4a6e;
   --color-surface: #0f172a;
   --color-surface-2: #1e293b;
   --color-surface-3: #334155;
@@ -11,7 +48,6 @@
   --color-high: #22c55e;
   --color-medium: #f59e0b;
   --color-low: #94a3b8;
-  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
 }
 
 * {
@@ -27,60 +63,68 @@ body,
   overflow: hidden;
 }
 
-/* Custom scrollbar for dark theme */
+body {
+  background: var(--color-ink-0);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;   /* tabular figures: timers and verse numbers line up */
+}
+
+/* One visible focus style for keyboard users, everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: rgb(227 166 70 / 0.35);
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
+  background: var(--color-line);
+  border: 2px solid var(--color-ink-1);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: var(--color-line-strong);
 }
 
-/* Fade-in animation for scripture cards */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* New cards and transcript lines ease in, briefly, so arrivals are noticed. */
+@keyframes arrive {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
 }
-
-.card-enter {
-  animation: slideIn 0.35s ease-out;
-}
-
-/* Fade-slide animation for transcript segments */
-@keyframes segmentEnter {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
+.card-enter,
 .segment-enter {
-  display: inline-block;
-  vertical-align: baseline;
-  animation: segmentEnter 0.35s ease-out;
+  animation: arrive 180ms ease-out;
 }
 
-/* Pulse for listening indicator */
-@keyframes pulse-ring {
-  0% { transform: scale(0.8); opacity: 0.8; }
-  100% { transform: scale(1.4); opacity: 0; }
+@keyframes blink {
+  50% { opacity: 0; }
 }
-.pulse-ring {
-  animation: pulse-ring 1.4s ease-out infinite;
+.caret {
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+.live-dot {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
