@@ -64,6 +64,8 @@ check('chapter+verse words', refs('second timothy chapter 3 verse 16'), ['2 Timo
 check('numbered book',      refs('go to 1 samuel 17:45'), ['1 Samuel 17:45'])
 check('multi-book line',    refs('John 3:16 and Romans 8:28'), ['John 3:16', 'Romans 8:28'])
 check('dedupes repeats',    refs('John 3:16 ... John 3:16'), ['John 3:16'])
+check('keeps heard phrase', extractor.extract('turn to First Corinthians 13 verse 4 now')[0].heard,
+  'First Corinthians 13 verse 4')
 
 group('Extraction: ordinary speech must not match')
 check('"mark 3 things"',    refs('I want to mark 3 things this morning'), [])

@@ -45,7 +45,8 @@ const STRONG_SEPARATOR = /^(?::|verses?|vv?\.?)$/i
  * Extract explicit Bible references from a text string.
  *
  * Returns objects shaped for bibleDb.lookupVerse():
- * { reference, book, chapter, verse_start, verse_end, confidence, trigger }
+ * { reference, book, chapter, verse_start, verse_end, confidence, trigger, heard }
+ * `heard` is the exact text that matched, so the UI can point at it.
  *
  * @param {string} text
  * @returns {Array<object>}
@@ -109,6 +110,7 @@ function extract(text) {
       verse_end:   safeEnd,
       confidence,
       trigger:     'explicit',
+      heard:       match[0].trim(),
       isChapterOnly,
     })
   }
