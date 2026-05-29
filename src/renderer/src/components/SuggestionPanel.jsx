@@ -1,6 +1,7 @@
 import ScriptureCard from './ScriptureCard'
+import ManualSearch from './ManualSearch'
 
-export default function SuggestionPanel({ suggestions, onSent, onSendToScreen, bibleDbReady, llmStatus, onClear }) {
+export default function SuggestionPanel({ suggestions, onSent, onSendToScreen, bibleDbReady, llmStatus, onClear, onManualLookup }) {
   // Build contextual hints for the empty state
   const hints = []
   if (bibleDbReady === false) hints.push({ icon: '📖', msg: 'Bible DB not set up. Run npm run setup-bible' })
@@ -30,6 +31,10 @@ export default function SuggestionPanel({ suggestions, onSent, onSendToScreen, b
             </button>
           </div>
         )}
+      </div>
+
+      <div className="px-3 py-2 border-b border-surface-3 shrink-0">
+        <ManualSearch onLookup={onManualLookup} />
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">

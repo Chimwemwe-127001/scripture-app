@@ -56,6 +56,7 @@ export default function ManualSearch({ onLookup, disabled }) {
 
       <input
         ref={inputRef}
+        name="lookup"
         type="text"
         value={query}
         disabled={disabled}

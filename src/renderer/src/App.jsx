@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import Header from './components/Header'
+import TopBar from './components/TopBar'
+import SettingsPanel from './components/SettingsPanel'
 import TranscriptPanel from './components/TranscriptPanel'
 import SuggestionPanel from './components/SuggestionPanel'
 import SentScreen from './components/SelectedQueue'
@@ -48,9 +49,13 @@ export default function App() {
   // VideoPsalm status
   const [vpStatus, setVpStatus]         = useState(false)
 
-  // Selected whisper model + audio device (controlled from Header)
+  // Selected whisper model + audio device (chosen in the settings panel)
   const [whisperModel, setWhisperModel]   = useState('small')
   const [deviceIndex, setDeviceIndex]     = useState(null)
+  const [devices, setDevices]             = useState([])
+
+  const [settingsOpen, setSettingsOpen]   = useState(false)
+  const [listeningSince, setListeningSince] = useState(null)
 
   // Strictly increasing segment ids, unique even within one millisecond.
   const segmentSeqRef = useRef(0)
@@ -83,10 +88,21 @@ export default function App() {
       if (saved.llmEndpoint) setLlmEndpoint(saved.llmEndpoint)
     })
 
+    Promise.all([api.getAudioDevices(), api.getSettings?.()]).then(([list, saved]) => {
+      if (!Array.isArray(list)) return
+      setDevices(list)
+      const savedIndex = saved?.deviceIndex
+      if (savedIndex != null && !list.some(d => d.index === savedIndex)) setDeviceIndex(null)
+    })
+
     api.checkBibleDb().then(r => setBibleDbReady(r.ready))
     api.checkLlmStatus().then(r => setLlmStatus(r))
     api.checkVideoPsalm?.().then(r => setVpStatus(r?.running ?? false))
   }, [])
+
+  useEffect(() => {
+    setListeningSince(isListening ? Date.now() : null)
+  }, [isListening])
 
   // Suggestion cap + TTL expiry (every 60s, drop cards and highlights older than 5 min)
   useEffect(() => {
@@ -260,6 +276,12 @@ export default function App() {
         return
       }
 
+      if (e.ctrlKey && e.key === ',') {
+        e.preventDefault()
+        setSettingsOpen(open => !open)
+        return
+      }
+
       // Number keys send the Nth suggestion straight to VideoPsalm.
       // In a booth, reaching for the mouse costs real seconds mid-service.
       if (!e.ctrlKey && !e.altKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
@@ -301,6 +323,19 @@ export default function App() {
   }, [llmStatus?.ok])
 
   // ------------------------------------------------------------------
+  // Settings: saved as soon as they change
+  // ------------------------------------------------------------------
+  function handleModelChange(model) {
+    setWhisperModel(model)
+    api?.saveSettings?.({ whisperModel: model })
+  }
+
+  function handleDeviceChange(index) {
+    setDeviceIndex(index)
+    api?.saveSettings?.({ deviceIndex: index })
+  }
+
+  // ------------------------------------------------------------------
   // LLM endpoint change
   // ------------------------------------------------------------------
   async function handleEndpointChange(url) {
@@ -333,24 +368,35 @@ export default function App() {
   // Render
   // ------------------------------------------------------------------
   return (
-    <div className="flex flex-col h-screen bg-surface text-white" style={{ fontFamily: 'Inter, Segoe UI, system-ui, sans-serif' }}>
-      <Header
+    <div className="relative flex flex-col h-screen bg-ink-0 text-fg">
+      <TopBar
         isListening={isListening}
         isStarting={isStarting}
-        onManualLookup={handleManualLookup}
+        listeningSince={listeningSince}
         statusMsg={statusMsg}
-        errorMsg={errorMsg}
         whisperModel={whisperModel}
-        deviceIndex={deviceIndex}
         llmStatus={llmStatus}
-        llmEndpoint={llmEndpoint}
-        bibleDbReady={bibleDbReady}
         vpStatus={vpStatus}
-        onModelChange={setWhisperModel}
-        onDeviceChange={setDeviceIndex}
-        onEndpointChange={handleEndpointChange}
+        bibleDbReady={bibleDbReady}
         onToggleListen={isListening ? handleStopListening : handleStartListening}
+        settingsOpen={settingsOpen}
+        onToggleSettings={() => setSettingsOpen(open => !open)}
       />
+      {settingsOpen && (
+        <SettingsPanel
+          onClose={() => setSettingsOpen(false)}
+          locked={isListening || isStarting}
+          devices={devices}
+          deviceIndex={deviceIndex}
+          onDeviceChange={handleDeviceChange}
+          whisperModel={whisperModel}
+          onModelChange={handleModelChange}
+          llmEndpoint={llmEndpoint}
+          llmStatus={llmStatus}
+          onEndpointChange={handleEndpointChange}
+          bibleDbReady={bibleDbReady}
+        />
+      )}
       {errorMsg && (
         <div className="mx-2 mt-1 px-3 py-2 bg-red-900/40 border border-red-700 rounded text-red-300 text-xs flex items-center justify-between">
           <span>⚠ {errorMsg}</span>
@@ -377,6 +423,7 @@ export default function App() {
           onClear={() => { setSegments([]); setChunkHighlights([]) }}
         />
         <SuggestionPanel
+          onManualLookup={handleManualLookup}
           suggestions={suggestions}
           onSent={handleSent}
           onSendToScreen={sendToScreen}
