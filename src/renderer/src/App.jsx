@@ -8,20 +8,6 @@ import SentScreen from './components/SelectedQueue'
 const SUGGESTION_MAX  = 10
 const SUGGESTION_TTL_MS = 5 * 60 * 1000  // 5 minutes
 
-// Rotating palette: each chunk gets its own accent colour
-const CHUNK_COLORS = [
-  { bg: 'rgba(251,191,36,0.15)',  border: '#fbbf24', text: '#fcd34d' }, // amber
-  { bg: 'rgba(56,189,248,0.15)',  border: '#38bdf8', text: '#7dd3fc' }, // sky
-  { bg: 'rgba(244,114,182,0.15)', border: '#f472b6', text: '#f9a8d4' }, // pink
-  { bg: 'rgba(52,211,153,0.15)',  border: '#34d399', text: '#6ee7b7' }, // emerald
-  { bg: 'rgba(167,139,250,0.15)', border: '#a78bfa', text: '#c4b5fd' }, // violet
-  { bg: 'rgba(251,146,60,0.15)',  border: '#fb923c', text: '#fdba74' }, // orange
-]
-
-// Distinct accent for operator-entered verses so they read differently to
-// anything the detection produced.
-const MANUAL_COLOR = { bg: 'rgba(148,163,184,0.15)', border: '#94a3b8', text: '#cbd5e1' }
-
 const api = window.electronAPI   // undefined outside Electron
 
 export default function App() {
@@ -37,9 +23,12 @@ export default function App() {
   const [errorMsg, setErrorMsg]         = useState('')
   const [toast, setToast]               = useState('')
 
-  // Chunk analysis state for transcript highlighting + analyzing indicator
+  // Chunks the LLM is still reading, for the "reading" indicator.
   const [analyzingChunks, setAnalyzingChunks] = useState([])   // [{chunkId, startAt, fireAt}]
-  const [chunkHighlights, setChunkHighlights] = useState([])   // [{chunkId, startAt, fireAt, color, addedAt}]
+  // Where each suggestion came from, so the transcript can point at it.
+  const [links, setLinks] = useState([])                       // [{id, reference, heard, startAt, fireAt, addedAt}]
+  // Reference of the card under the mouse; its source is highlighted.
+  const [focusRef, setFocusRef] = useState(null)
 
   // LLM (LM Studio) status
   const [llmStatus, setLlmStatus]       = useState(null)   // { ok, model, error }
@@ -109,7 +98,7 @@ export default function App() {
     const id = setInterval(() => {
       const cutoff = Date.now() - SUGGESTION_TTL_MS
       setSuggestions(prev => prev.filter(s => !s.addedAt || s.addedAt > cutoff))
-      setChunkHighlights(prev => prev.filter(h => !h.addedAt || h.addedAt > cutoff))
+      setLinks(prev => prev.filter(l => l.addedAt > cutoff))
     }, 60_000)
     return () => clearInterval(id)
   }, [])
@@ -134,7 +123,7 @@ export default function App() {
     if (isStarting || isListening) return   // guard against a double click
     setErrorMsg('')
     setSuggestions([])
-    setChunkHighlights([])
+    setLinks([])
     setAnalyzingChunks([])
     setIsStarting(true)
     setStatusMsg('Loading Whisper model…')
@@ -192,7 +181,6 @@ export default function App() {
         // Unique key even when the same verse is looked up twice in a row.
         id: `${c.id}-manual-${now}-${i}`,
         addedAt: now,
-        chunkColor: MANUAL_COLOR,
       }))
       return [...stamped, ...prev].slice(0, SUGGESTION_MAX)
     })
@@ -225,24 +213,12 @@ export default function App() {
       }
     })
     api.onScriptureSuggestion((card) => {
-      // chunkId === null means the instant regex path: amber, no transcript highlight
-      const colorIdx = card.chunkId != null
-        ? ((card.chunkId - 1) % CHUNK_COLORS.length + CHUNK_COLORS.length) % CHUNK_COLORS.length
-        : 0
-      const color = CHUNK_COLORS[colorIdx]
-      if (card.chunkId != null) {
-        setChunkHighlights(prev => {
-          if (prev.some(h => h.chunkId === card.chunkId)) return prev
-          return [...prev, {
-            chunkId: card.chunkId, startAt: card.startAt, fireAt: card.fireAt,
-            color, addedAt: Date.now(),
-          }]
-        })
-      }
-      setSuggestions(prev => {
-        const stamped = { ...card, addedAt: Date.now(), chunkColor: color }
-        return [stamped, ...prev].slice(0, SUGGESTION_MAX)
-      })
+      const addedAt = Date.now()
+      setLinks(prev => [...prev, {
+        id: card.id, reference: card.reference, heard: card.heard,
+        startAt: card.startAt, fireAt: card.fireAt, addedAt,
+      }])
+      setSuggestions(prev => [{ ...card, addedAt }, ...prev].slice(0, SUGGESTION_MAX))
     })
     api.onLlmError?.((data) => {
       setErrorMsg(`LM Studio error: ${data.message || 'Channel Error. Try reloading the model in LM Studio.'}`)
@@ -414,16 +390,18 @@ export default function App() {
           The desktop bridge is not available. Start the app with npm run dev.
         </div>
       )}
-      <div className="flex flex-1 overflow-hidden gap-2 p-2">
+      <div className="flex flex-1 min-h-0 gap-px bg-line">
         <TranscriptPanel
           segments={segments}
           isListening={isListening}
           isAnalyzing={analyzingChunks.length > 0}
-          chunkHighlights={chunkHighlights}
-          onClear={() => { setSegments([]); setChunkHighlights([]) }}
+          links={links}
+          focusRef={focusRef}
+          onClear={() => { setSegments([]); setLinks([]) }}
         />
         <SuggestionPanel
           onManualLookup={handleManualLookup}
+          onFocusRef={setFocusRef}
           suggestions={suggestions}
           onSent={handleSent}
           onSendToScreen={sendToScreen}

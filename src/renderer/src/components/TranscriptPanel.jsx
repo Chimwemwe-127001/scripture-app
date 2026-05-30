@@ -1,98 +1,144 @@
 import { useEffect, useRef } from 'react'
+import Panel, { PanelAction } from './Panel'
 
-export default function TranscriptPanel({ segments, isListening, isAnalyzing, chunkHighlights = [], onClear }) {
+/** m:ss since the first line of the session. */
+function clock(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/**
+ * Work out how each transcript line relates to the suggestions.
+ *
+ * Explicit references (regex path) carry the exact `heard` text, so that
+ * phrase is marked inside its line. Paraphrases (LLM path) only know the time
+ * window of the chunk they came from, so those lines get a margin rule and
+ * the reference is tagged on the last line of the window.
+ */
+function linkLines(segments, links) {
+  const byLine = new Map(segments.map(s => [s.id, { phrases: [], inWindow: [], tags: [] }]))
+
+  for (const link of links) {
+    if (link.heard) {
+      // Newest matching line inside the window around the detection.
+      const needle = link.heard.toLowerCase()
+      const hit = [...segments].reverse().find(s =>
+        s.at >= link.startAt - 2000 && s.at <= link.fireAt + 2000 &&
+        s.text.toLowerCase().includes(needle))
+      if (hit) byLine.get(hit.id).phrases.push(link)
+      continue
+    }
+    const inside = segments.filter(s => s.at >= link.startAt && s.at <= link.fireAt + 1500)
+    inside.forEach(s => byLine.get(s.id).inWindow.push(link))
+    if (inside.length) byLine.get(inside[inside.length - 1].id).tags.push(link)
+  }
+  return byLine
+}
+
+function RefTag({ link, focused }) {
+  return (
+    <span
+      className={`ml-1.5 inline-flex items-center h-[18px] px-1.5 rounded-sm font-mono text-[11px] align-[1px]
+        ${focused ? 'bg-accent text-accent-ink' : 'bg-ink-2 text-accent'}`}
+    >
+      {link.reference}
+    </span>
+  )
+}
+
+/** A line of text with each heard phrase underlined and tagged. */
+function LineText({ text, phrases, focusRef }) {
+  if (phrases.length === 0) return text
+  const parts = []
+  let rest = text
+  for (const link of phrases) {
+    const i = rest.toLowerCase().indexOf(link.heard.toLowerCase())
+    if (i === -1) continue
+    const focused = focusRef === link.reference
+    parts.push(rest.slice(0, i))
+    parts.push(
+      <span key={link.id}>
+        <mark
+          className={`text-fg underline decoration-2 underline-offset-[3px]
+            ${focused ? 'bg-accent/20 decoration-accent' : 'bg-transparent decoration-accent/70'}`}
+        >
+          {rest.slice(i, i + link.heard.length)}
+        </mark>
+        {/* The tag only adds information when the words differ from the reference. */}
+        {link.heard.toLowerCase() !== link.reference.toLowerCase() && <RefTag link={link} focused={focused} />}
+      </span>
+    )
+    rest = rest.slice(i + link.heard.length)
+  }
+  parts.push(rest)
+  return parts
+}
+
+export default function TranscriptPanel({
+  segments, links = [], focusRef, isListening, isAnalyzing, onClear,
+}) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [segments])
 
   const wordCount = segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0)
-
-  function getSegmentHighlight(seg) {
-    // Matches on `seg.at` (arrival time). A segment is highlighted when it
-    // arrived inside a chunk's time window, plus a short grace period.
-    const at = seg.at
-    if (at == null) return null
-    for (const h of chunkHighlights) {
-      if (at >= h.startAt && at <= h.fireAt + 1500) return h.color
-    }
-    return null
-  }
+  const lineLinks = linkLines(segments, links)
+  const t0 = segments[0]?.at ?? 0
 
   return (
-    <div className="flex flex-col w-64 shrink-0 bg-surface-2 rounded-lg overflow-hidden border border-surface-3">
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-surface-3 shrink-0">
-        <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-brand-light shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-          </svg>
-          <span className="text-xs font-semibold text-surface-4 uppercase tracking-wider">Live Transcript</span>
+    <Panel
+      title="Transcript"
+      className="w-[340px] shrink-0"
+      actions={segments.length > 0 && <PanelAction onClick={onClear} title="Clear transcript">Clear</PanelAction>}
+      footer={<>
+        <span className="font-mono">{wordCount} words</span>
+        {isAnalyzing && <span className="text-fg-2">LM Studio is reading the last passage</span>}
+      </>}
+    >
+      {segments.length === 0 ? (
+        <div className="h-full flex flex-col items-center justify-center px-8 text-center text-fg-3 gap-2">
+          {isListening
+            ? <p>Listening. Waiting for speech.</p>
+            : <>
+                <p className="text-fg-2">The transcript appears here once you start listening.</p>
+                <p>
+                  Press <kbd className="font-mono text-fg-2 px-1 border border-line rounded-sm">Ctrl L</kbd> or click Listen.
+                </p>
+              </>}
         </div>
-        {segments.length > 0 && (
-          <button
-            onClick={onClear}
-            className="text-xs text-surface-4 hover:text-red-400 transition-colors"
-            title="Clear transcript"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-3">
-        {segments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center gap-2 text-surface-4">
-            <svg className="w-8 h-8 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-            </svg>
-            <p className="text-xs opacity-50">Waiting for audio input…</p>
-          </div>
-        ) : (
-          <div className="text-sm text-slate-200 leading-relaxed">
-            {segments.map((seg) => {
-              const hl = getSegmentHighlight(seg)
-              return (
-                <span
-                  key={seg.id}
-                  className="segment-enter"
-                  style={hl ? {
-                    backgroundColor: hl.bg,
-                    color: hl.text,
-                    borderRadius: '3px',
-                    padding: '1px 3px',
-                    margin: '0 1px',
-                  } : undefined}
-                >
-                  {seg.text}{' '}
+      ) : (
+        <ol className="py-2">
+          {segments.map(seg => {
+            const { phrases, inWindow, tags } = lineLinks.get(seg.id)
+            const linked = phrases.length > 0 || inWindow.length > 0
+            const focused = [...phrases, ...inWindow].some(l => l.reference === focusRef)
+            return (
+              <li key={seg.id} className="segment-enter grid grid-cols-[44px_1fr] pr-4">
+                <span className="pt-[3px] pl-4 font-mono text-[11px] text-fg-3 select-none">
+                  {clock(seg.at - t0)}
                 </span>
-              )
-            })}
-            {isListening && (
-              <span className="inline-block w-2 h-3 ml-0.5 bg-brand-light rounded-sm animate-pulse align-middle" />
-            )}
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="px-3 py-1.5 border-t border-surface-3 shrink-0 flex items-center justify-between">
-        <span className="text-xs text-surface-4">
-          {wordCount} <span className="opacity-60">words</span>
-        </span>
-        {isAnalyzing && (
-          <span className="flex items-center gap-1.5 text-xs text-amber-400">
-            <span className="flex gap-px items-end h-3">
-              <span className="w-0.5 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-0.5 h-3 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '120ms' }} />
-              <span className="w-0.5 h-1.5 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '240ms' }} />
-            </span>
-            <span>Analyzing…</span>
-          </span>
-        )}
-      </div>
-    </div>
+                <p
+                  className={`py-1 pl-3 border-l-2 leading-relaxed text-[14px]
+                    ${inWindow.length ? (focused ? 'border-accent bg-accent/10' : 'border-accent/50') : 'border-transparent'}
+                    ${linked ? 'text-fg' : 'text-fg-2'}`}
+                >
+                  <LineText text={seg.text} phrases={phrases} focusRef={focusRef} />
+                  {tags.map(link => <RefTag key={link.id} link={link} focused={focusRef === link.reference} />)}
+                </p>
+              </li>
+            )
+          })}
+          {isListening && (
+            <li className="grid grid-cols-[44px_1fr] pr-4" aria-hidden="true">
+              <span />
+              <span className="pl-3.5 py-1"><span className="caret inline-block w-[7px] h-[15px] bg-fg-3 align-middle" /></span>
+            </li>
+          )}
+        </ol>
+      )}
+      <div ref={bottomRef} />
+    </Panel>
   )
 }
