@@ -408,6 +408,7 @@ export default function App() {
           onClear={() => setSuggestions([])}
           bibleDbReady={bibleDbReady}
           llmStatus={llmStatus}
+          isListening={isListening}
         />
         <SentScreen
           history={sentHistory}
