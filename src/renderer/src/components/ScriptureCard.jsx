@@ -1,15 +1,35 @@
 import { useState } from 'react'
+import Icon from './Icon'
 
-const CONFIDENCE_STYLES = {
-  high:   { badge: 'bg-high/20 text-high border-high/40',   dot: 'bg-high',   label: 'High' },
-  medium: { badge: 'bg-medium/20 text-medium border-medium/40', dot: 'bg-medium', label: 'Med' },
-  low:    { badge: 'bg-low/20 text-low border-low/40',     dot: 'bg-low',   label: 'Low' }
+const CONFIDENCE = {
+  high:   { bars: 3, label: 'High',   color: 'bg-ok' },
+  medium: { bars: 2, label: 'Medium', color: 'bg-warn' },
+  low:    { bars: 1, label: 'Low',    color: 'bg-fg-3' },
 }
 
-const TRIGGER_LABELS = {
-  explicit:   'Explicit',
+const SOURCE = {
+  explicit:   'Cited',
   paraphrase: 'Paraphrase',
-  allusion:   'Allusion'
+  allusion:   'Allusion',
+}
+
+/** Confidence as a label plus a 3-step bar, so it does not rely on colour. */
+function Confidence({ level }) {
+  const c = CONFIDENCE[level] || CONFIDENCE.low
+  return (
+    <span className="flex items-center gap-1.5 text-[12px] text-fg-3" title={`${c.label} confidence`}>
+      <span className="flex items-end gap-[2px] h-[10px]" aria-hidden="true">
+        {[1, 2, 3].map(n => (
+          <span
+            key={n}
+            className={`w-[3px] rounded-[1px] ${n <= c.bars ? c.color : 'bg-line-strong'}`}
+            style={{ height: `${4 + n * 2}px` }}
+          />
+        ))}
+      </span>
+      {c.label}
+    </span>
+  )
 }
 
 function CopyButton({ text }) {
@@ -32,124 +52,128 @@ function CopyButton({ text }) {
       /* copying is a convenience, so a failure is not shown */
     }
   }
+
   return (
     <button
       onClick={copy}
+      aria-label="Copy verse text"
       title="Copy verse text"
-      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-surface-3 text-surface-4 hover:text-white shrink-0"
+      className="w-8 h-8 flex items-center justify-center rounded-md text-fg-3 hover:text-fg hover:bg-ink-3"
     >
-      {copied
-        ? <svg className="w-3.5 h-3.5 text-high" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-        : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-      }
+      <Icon name={copied ? 'check' : 'copy'} size={15} className={copied ? 'text-ok' : ''} />
     </button>
   )
 }
 
-function SendToScreenBtn({ scripture, onSendToScreen }) {
+function SendButton({ scripture, hotkey, primary, onSendToScreen }) {
   const [state, setState] = useState('idle')
-  const [errMsg, setErrMsg] = useState('')
+  const [error, setError] = useState('')
 
   const send = async (e) => {
     e.stopPropagation()
     setState('sending')
-    // Send goes through the shared App-level handler so the keyboard shortcuts
-    // and this button follow exactly the same path.
+    // Same handler as the number keys, so both paths behave identically.
     const result = await onSendToScreen(scripture)
     if (result?.ok) {
-      setState('ok')
+      setState('sent')
       setTimeout(() => setState('idle'), 2000)
     } else {
-      setErrMsg(result?.error || 'Unknown error')
+      setError(result?.error || 'Send failed')
       setState('error')
       setTimeout(() => setState('idle'), 3000)
     }
   }
 
-  const configs = {
-    idle:    { label: 'Send to Screen', extra: 'bg-brand hover:bg-brand-light text-white border-transparent shadow-sm' },
-    sending: { label: 'Sending\u2026',       extra: 'bg-surface-3 text-surface-4 border-surface-3 cursor-wait' },
-    ok:      { label: 'Sent \u2713',         extra: 'bg-high/20 text-high border-high/40' },
-    error:   { label: errMsg || 'Error', extra: 'bg-red-900/30 text-red-400 border-red-700/40' },
-  }
-  const { label, extra } = configs[state]
+  const look = state === 'error'
+    ? 'border border-err/60 text-err'
+    : state === 'sent'
+      ? 'border border-ok/60 text-ok'
+      : primary
+        ? 'bg-accent text-accent-ink hover:brightness-110'
+        : 'border border-line-strong text-fg hover:bg-ink-3'
 
   return (
     <button
       onClick={send}
       disabled={state === 'sending'}
-      title={state === 'error' ? errMsg : `Send ${scripture.reference} to VideoPsalm`}
-      className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border font-semibold transition-all ${extra}`}
+      title={state === 'error' ? error : `Send to VideoPsalm${hotkey ? ` (${hotkey})` : ''}`}
+      className={`flex items-center gap-2 h-8 pl-3 pr-2 rounded-md font-medium transition ${look}`}
     >
-      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-      </svg>
-      <span>{label}</span>
+      {state === 'sending' ? 'Sending' : state === 'sent' ? 'Sent' : state === 'error' ? 'Failed' : 'Send'}
+      {state === 'idle' && hotkey && (
+        <kbd
+          className={`font-mono text-[11px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-sm
+            ${primary ? 'bg-accent-ink/15' : 'bg-ink-3 text-fg-2'}`}
+        >
+          {hotkey}
+        </kbd>
+      )}
+      {state === 'sent' && <Icon name="check" size={14} />}
     </button>
   )
 }
 
-export default function ScriptureCard({ scripture, onSent, onSendToScreen, hotkey }) {
-  const conf = CONFIDENCE_STYLES[scripture.confidence] || CONFIDENCE_STYLES.low
+/**
+ * ScriptureCard: one suggestion in the Next up queue.
+ *
+ * Reading order is hotkey, reference, verse, then where it came from. The
+ * top card (key 1) is emphasised because it is what the operator most often
+ * sends. Hovering highlights the source of the card in the transcript.
+ */
+export default function ScriptureCard({ scripture, hotkey, primary, onSent, onSendToScreen, onFocusRef }) {
   const copyText = `${scripture.reference} (${scripture.translation})\n"${scripture.text}"`
-  const chunkColor = scripture.chunkColor
-
-  const handleCardClick = () => {
-    onSent?.(scripture, false)
-  }
+  const heardDiffers = scripture.heard && scripture.heard.toLowerCase() !== scripture.reference.toLowerCase()
 
   return (
-    <div
-      className="card-enter bg-surface-2 border border-surface-3 rounded-lg p-3 cursor-pointer
-                 hover:border-brand/50 hover:bg-surface-3 transition-all duration-150 group"
-      style={chunkColor ? { borderLeftColor: chunkColor.border, borderLeftWidth: '3px' } : undefined}
-      onClick={handleCardClick}
-      title="Click to log to history"
+    <article
+      className={`card-enter group grid grid-cols-[52px_1fr] border-b border-line cursor-default
+        ${primary ? 'bg-ink-2 shadow-[inset_2px_0_0_var(--color-accent)]' : 'hover:bg-ink-2/60'}`}
+      onMouseEnter={() => onFocusRef?.(scripture.reference)}
+      onMouseLeave={() => onFocusRef?.(null)}
+      onClick={() => onSent?.(scripture, false)}
+      title="Click to mark as used without sending"
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2 min-w-0">
-          {/* Hotkey badge: shows which number key sends this card */}
-          {hotkey && (
-            <kbd
-              title={`Press ${hotkey} to send this to VideoPsalm`}
-              className="shrink-0 w-4 h-4 flex items-center justify-center rounded bg-surface-3
-                         text-surface-4 text-[10px] font-mono border border-surface-3"
-            >
-              {hotkey}
-            </kbd>
-          )}
-          <div className="min-w-0">
-            <span className="text-brand-light font-semibold text-sm group-hover:text-white transition-colors">
-              {scripture.reference}
-            </span>
-            <span className="ml-2 text-surface-4 text-xs">{scripture.translation}</span>
-            {scripture.manual && (
-              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-brand/40 text-brand-light">
-                manual
-              </span>
-            )}
+      <div className={`pt-3.5 text-center font-mono text-[22px] leading-none
+        ${primary ? 'text-accent' : 'text-fg-3'}`}
+      >
+        {hotkey ?? ''}
+      </div>
+
+      <div className="py-3 pr-4 min-w-0">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h3 className="text-[15px] font-semibold text-fg truncate">{scripture.reference}</h3>
+            <span className="font-mono text-[11px] text-fg-3">{scripture.translation}</span>
+          </div>
+          <Confidence level={scripture.confidence} />
+        </div>
+
+        <p className={`mt-1.5 font-serif leading-[1.55] line-clamp-3
+          ${primary ? 'text-[17px] text-fg' : 'text-[16px] text-fg-2'}`}
+        >
+          {scripture.text}
+        </p>
+
+        <div className="mt-2.5 flex items-center justify-between gap-3">
+          <p className="text-[12px] text-fg-3 truncate">
+            {scripture.manual
+              ? 'Typed by operator'
+              : <>
+                  {SOURCE[scripture.trigger] || scripture.trigger}
+                  {heardDiffers && <> · heard <span className="text-fg-2 italic">"{scripture.heard}"</span></>}
+                </>}
+          </p>
+          <div className="flex items-center gap-1 shrink-0">
+            <CopyButton text={copyText} />
+            <SendButton
+              scripture={scripture}
+              hotkey={hotkey}
+              primary={primary}
+              onSendToScreen={onSendToScreen}
+            />
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <CopyButton text={copyText} />
-          <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border font-medium ${conf.badge}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${conf.dot}`} />
-            {conf.label}
-          </span>
-        </div>
       </div>
-
-      <p className="text-slate-300 text-xs leading-relaxed line-clamp-3 mb-3">
-        {scripture.text}
-      </p>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-surface-4 text-xs italic shrink-0">
-          {TRIGGER_LABELS[scripture.trigger] || scripture.trigger}
-        </span>
-        <SendToScreenBtn scripture={scripture} onSendToScreen={onSendToScreen} />
-      </div>
-    </div>
+    </article>
   )
 }
