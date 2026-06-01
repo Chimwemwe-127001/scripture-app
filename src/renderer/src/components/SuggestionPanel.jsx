@@ -19,6 +19,10 @@ export default function SuggestionPanel({
       actions={suggestions.length > 0 && (
         <PanelAction onClick={onClear} title="Clear all suggestions">Clear</PanelAction>
       )}
+      footer={<>
+        <span>Newest first</span>
+        <span>Suggestions clear after 5 minutes</span>
+      </>}
     >
       <div className="px-4 py-3 border-b border-line">
         <ManualSearch onLookup={onManualLookup} />

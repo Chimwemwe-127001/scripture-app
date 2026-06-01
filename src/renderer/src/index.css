@@ -37,17 +37,6 @@
   --radius-sm: 3px;
   --radius-md: 4px;
 
-  /* Legacy names used by components not yet restyled. Removed once all
-     components use the tokens above. */
-  --color-brand: #2C5F8A;
-  --color-brand-light: #3a7ab5;
-  --color-surface: #0f172a;
-  --color-surface-2: #1e293b;
-  --color-surface-3: #334155;
-  --color-surface-4: #475569;
-  --color-high: #22c55e;
-  --color-medium: #f59e0b;
-  --color-low: #94a3b8;
 }
 
 * {

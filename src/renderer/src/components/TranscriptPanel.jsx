@@ -98,7 +98,7 @@ export default function TranscriptPanel({
       </>}
     >
       {segments.length === 0 ? (
-        <div className="h-full flex flex-col items-center justify-center px-8 text-center text-fg-3 gap-2">
+        <div className="px-8 py-16 flex flex-col items-center text-center text-fg-3 gap-2">
           {isListening
             ? <p>Listening. Waiting for speech.</p>
             : <>
