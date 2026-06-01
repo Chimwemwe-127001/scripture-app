@@ -3,7 +3,8 @@ import TopBar from './components/TopBar'
 import SettingsPanel from './components/SettingsPanel'
 import TranscriptPanel from './components/TranscriptPanel'
 import SuggestionPanel from './components/SuggestionPanel'
-import SentScreen from './components/SelectedQueue'
+import OnScreenPanel from './components/OnScreenPanel'
+import StatusBar from './components/StatusBar'
 
 const SUGGESTION_MAX  = 10
 const SUGGESTION_TTL_MS = 5 * 60 * 1000  // 5 minutes
@@ -21,7 +22,7 @@ export default function App() {
   const [isStarting, setIsStarting]     = useState(false)
   const [statusMsg, setStatusMsg]       = useState('')
   const [errorMsg, setErrorMsg]         = useState('')
-  const [toast, setToast]               = useState('')
+  const [notice, setNotice]             = useState('')   // short confirmation in the status bar
 
   // Chunks the LLM is still reading, for the "reading" indicator.
   const [analyzingChunks, setAnalyzingChunks] = useState([])   // [{chunkId, startAt, fireAt}]
@@ -265,10 +266,10 @@ export default function App() {
         const target = suggestions[idx]
         if (target) {
           e.preventDefault()
-          setToast(`Sending ${target.reference}…`)
+          setNotice(`Sending ${target.reference} to VideoPsalm`)
           sendToScreen(target).then(r => {
-            setToast(r.ok ? `Sent ${target.reference}` : `Failed: ${target.reference}`)
-            setTimeout(() => setToast(''), 2000)
+            setNotice(r.ok ? `${target.reference} is on screen` : '')
+            setTimeout(() => setNotice(''), 4000)
           })
         }
         return
@@ -278,13 +279,13 @@ export default function App() {
         // Escape only dismisses transient UI. Clearing suggestions needs the
         // explicit Clear button, because Escape is pressed by reflex.
         if (errorMsg) { setErrorMsg(''); return }
-        if (toast) { setToast(''); return }
+        if (notice) { setNotice(''); return }
         document.activeElement?.blur?.()
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [isListening, suggestions, errorMsg, toast])
+  }, [isListening, suggestions, errorMsg, notice])
 
   // ------------------------------------------------------------------
   // LLM auto-retry: poll every 30s when LLM is disconnected
@@ -336,8 +337,9 @@ export default function App() {
     })
   }
 
-  const handleRemoveFromHistory = (id) => {
-    setSentHistory(prev => prev.filter(s => s.id !== id))
+  // By entry, not id: a verse sent twice appears twice and shares an id.
+  const handleRemoveFromHistory = (entry) => {
+    setSentHistory(prev => prev.filter(s => s !== entry))
   }
 
   // ------------------------------------------------------------------
@@ -373,23 +375,6 @@ export default function App() {
           bibleDbReady={bibleDbReady}
         />
       )}
-      {errorMsg && (
-        <div className="mx-2 mt-1 px-3 py-2 bg-red-900/40 border border-red-700 rounded text-red-300 text-xs flex items-center justify-between">
-          <span>⚠ {errorMsg}</span>
-          <button onClick={() => setErrorMsg('')} className="ml-4 text-red-400 hover:text-white">✕</button>
-        </div>
-      )}
-      {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-md
-                        bg-surface-2 border border-brand/50 text-white text-xs shadow-lg">
-          {toast}
-        </div>
-      )}
-      {!api && (
-        <div className="mx-2 mt-2 px-3 py-2 border border-surface-3 rounded text-surface-4 text-xs">
-          The desktop bridge is not available. Start the app with npm run dev.
-        </div>
-      )}
       <div className="flex flex-1 min-h-0 gap-px bg-line">
         <TranscriptPanel
           segments={segments}
@@ -410,12 +395,18 @@ export default function App() {
           llmStatus={llmStatus}
           isListening={isListening}
         />
-        <SentScreen
+        <OnScreenPanel
           history={sentHistory}
+          onResend={sendToScreen}
           onRemove={handleRemoveFromHistory}
           onClear={() => setSentHistory([])}
         />
       </div>
+      <StatusBar
+        error={errorMsg || (!api ? 'The desktop bridge is not available. Start the app with npm run dev.' : '')}
+        notice={notice}
+        onDismiss={() => setErrorMsg('')}
+      />
     </div>
   )
 }
