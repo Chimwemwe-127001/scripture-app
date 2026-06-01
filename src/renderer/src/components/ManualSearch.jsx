@@ -55,7 +55,7 @@ export default function ManualSearch({ onLookup }) {
           value={query}
           onChange={e => { setQuery(e.target.value); setError('') }}
           onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setError(''); e.target.blur() } }}
-          placeholder="Look up a reference, e.g. Romans 8:28 or first john 1 verse 9"
+          placeholder="Look up a reference, e.g. Romans 8:28"
           aria-label="Look up a reference"
           aria-invalid={!!error}
           spellCheck={false}
