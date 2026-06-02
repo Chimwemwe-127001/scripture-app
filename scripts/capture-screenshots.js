@@ -39,6 +39,9 @@ const typeInto = (selector, text) => `(() => {
   el.form.requestSubmit()
 })()`
 const click = (selector) => `document.querySelector(${JSON.stringify(selector)}).click()`
+// React derives mouseenter from a bubbling mouseover.
+const hover = (selector, index) => `document.querySelectorAll(${JSON.stringify(selector)})[${index}]
+  .dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: document.body }))`
 const press = (key, extra = '') =>
   `document.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true ${extra} }))`
 
@@ -49,9 +52,10 @@ const STEPS = [
   { wait: 26000, shot: '3-suggestions.png' },
   { run: press('3'), wait: 600 },
   { run: press('1'), wait: 900, shot: '4-on-screen.png' },
-  { run: typeInto('input[name="lookup"]', 'Hezekiah 3:16'), wait: 700, shot: '5-lookup-miss.png' },
+  { run: hover('article', 2), wait: 500, shot: '5-hover-link.png' },
+  { run: typeInto('input[name="lookup"]', 'Hezekiah 3:16'), wait: 700, shot: '6-lookup-miss.png' },
   { run: press('Escape'), wait: 200 },
-  { run: click('button[aria-label="Settings"]'), wait: 700, shot: '6-settings.png' },
+  { run: click('button[aria-label="Settings"]'), wait: 700, shot: '7-settings.png' },
 ]
 
 app.whenReady().then(async () => {
