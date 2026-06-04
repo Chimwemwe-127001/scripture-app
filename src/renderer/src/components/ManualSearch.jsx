@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import Icon from './Icon'
 
 /**
  * ManualSearch: the operator's override.
@@ -7,7 +8,7 @@ import { useState, useRef, useEffect } from 'react'
  * or the LLM is not running. The operator can always type the reference.
  * Ctrl+F focuses this box from anywhere in the app.
  */
-export default function ManualSearch({ onLookup, disabled }) {
+export default function ManualSearch({ onLookup }) {
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -36,53 +37,39 @@ export default function ManualSearch({ onLookup, disabled }) {
     const result = await onLookup(text)
     setBusy(false)
 
-    if (result?.ok) {
-      setQuery('')
-    } else {
-      setError(result?.error || 'Not found')
-      setTimeout(() => setError(''), 4000)
-    }
+    if (result?.ok) setQuery('')
+    else setError(result?.error || 'Not found')
   }
 
   return (
-    <form onSubmit={submit} className="relative flex items-center">
-      <svg
-        className="absolute left-2 w-3.5 h-3.5 text-surface-4 pointer-events-none"
-        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+    <form onSubmit={submit}>
+      <div
+        className={`flex items-center gap-2 h-9 px-3 rounded-md bg-ink-2 border transition-colors
+          ${error ? 'border-err/70' : 'border-line hover:border-line-strong focus-within:border-accent'}`}
       >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-
-      <input
-        ref={inputRef}
-        type="text"
-        value={query}
-        disabled={disabled}
-        onChange={e => { setQuery(e.target.value); setError('') }}
-        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); e.target.blur() } }}
-        placeholder="Look up a verse…"
-        title="Type a reference such as John 3:16 (Ctrl+F)"
-        className={`bg-surface-3 border text-white text-xs rounded pl-7 pr-14 py-1 w-52
-                    placeholder:text-surface-4 focus:outline-none transition-colors
-                    disabled:opacity-40
-                    ${error ? 'border-red-600' : 'border-surface-3 focus:border-brand'}`}
-      />
-
-      <button
-        type="submit"
-        disabled={disabled || busy || !query.trim()}
-        className="absolute right-1 text-[10px] px-1.5 py-0.5 rounded bg-brand hover:bg-brand-light
-                   text-white disabled:opacity-30 disabled:hover:bg-brand transition-colors"
-      >
-        {busy ? '…' : 'Find'}
-      </button>
-
+        <Icon name="search" size={15} className="text-fg-3 shrink-0" />
+        <input
+          ref={inputRef}
+          name="lookup"
+          type="text"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setError('') }}
+          onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setError(''); e.target.blur() } }}
+          placeholder="Look up a reference, e.g. Romans 8:28"
+          aria-label="Look up a reference"
+          aria-invalid={!!error}
+          spellCheck={false}
+          className="flex-1 min-w-0 bg-transparent text-fg placeholder:text-fg-3 focus:outline-none"
+        />
+        <kbd className="font-mono text-[11px] text-fg-3 px-1.5 h-5 flex items-center border border-line rounded-sm">
+          {busy ? '...' : query ? 'Enter' : 'Ctrl F'}
+        </kbd>
+      </div>
       {error && (
-        <div className="absolute top-8 left-0 z-50 bg-red-900/90 border border-red-700 text-red-200
-                        text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
+        <p role="alert" className="mt-1.5 flex items-center gap-1.5 text-[12px] text-err">
+          <Icon name="alert" size={13} />
           {error}
-        </div>
+        </p>
       )}
     </form>
   )
