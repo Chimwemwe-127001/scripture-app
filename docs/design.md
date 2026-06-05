@@ -4,7 +4,7 @@ How the operator console went from a working prototype to a tool that is calm to
 
 ## Contents
 
-- [The problem, seen from the booth](#the-problem-seen-from-the-booth)
+- [The problem, from our booth](#the-problem-from-our-booth)
 - [Design goals](#design-goals)
 - [Low fidelity](#low-fidelity)
 - [Low fidelity to high fidelity](#low-fidelity-to-high-fidelity)
@@ -17,18 +17,18 @@ How the operator console went from a working prototype to a tool that is calm to
 
 ---
 
-## The problem, seen from the booth
+## The problem, from our booth
 
-This started in my own church. During services the scripture often reached the screen late, and sometimes not at all. When the preacher says "turn to John 3:16" the media team can keep up. But very often the man of God quotes a verse, or paraphrases it, without naming it, and someone in the booth has to recognise it, find it and put it up before the moment has passed.
+I serve on our church's media team, and this is something we deal with every service. The scripture often reaches the screen late, and sometimes not at all. When the preacher says "turn to John 3:16" we can keep up. But very often the man of God quotes a verse, or paraphrases it, without naming it, and whoever is at the desk has to recognise it, find it and put it up before the moment has passed.
 
-The person doing that is usually a volunteer. While the sermon is going they are:
+Whoever is at the desk, often me, is doing all of this at once while the sermon goes on:
 
 - listening to the pulpit and watching the congregation screen at the same time,
 - working in presentation software (VideoPsalm) on a second monitor,
 - sitting in a dim room, often with the keyboard in their lap,
 - under time pressure: a verse that arrives ten seconds late has missed its moment.
 
-So the app is not something they read. It is something they glance at. Every design decision below comes from that.
+So the app is not something we read. It is something we glance at. Every design decision below comes from that.
 
 ## Design goals
 
@@ -48,7 +48,7 @@ I sketched the layout and the operator's path before touching any styles. These 
 
 ![Low-fidelity layout wireframe](design/lofi/layout.svg)
 
-Three columns follow the operator's reading order, left to right: what was said, what could go up next, what is up now. This borrows the preview and program idea from broadcast tools, which church media volunteers already know from their mixers and presentation software.
+Three columns follow the operator's reading order, left to right: what was said, what could go up next, what is up now. This borrows the preview and program idea from broadcast tools, which our team already knows from the mixer and the presentation software.
 
 ### Operator flow
 

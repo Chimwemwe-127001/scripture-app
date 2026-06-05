@@ -1,6 +1,6 @@
 # User guide
 
-For whoever is running media during the service. You do not need to know how the app works inside to use it well.
+Written for the rest of our media team, and for anyone who takes the desk during a service. You do not need to know how the app works inside to use it well.
 
 ## Contents
 
