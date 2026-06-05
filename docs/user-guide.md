@@ -17,7 +17,7 @@ For whoever is running media during the service. You do not need to know how the
 
 ## The screen at a glance
 
-![The console during a service](design/after/4-on-screen.png)
+![The console during a service](design/hifi/4-on-screen.png)
 
 | Area | What it shows |
 |---|---|
@@ -50,7 +50,7 @@ Clicking a card without pressing Send marks it as used (it goes to Earlier) with
 
 ## Reading a card
 
-![A suggestion card](design/after/2-first-detection.png)
+![A suggestion card](design/hifi/2-first-detection.png)
 
 - **Number** on the left: the key that sends it.
 - **Reference and verse** in KJV.

@@ -7,8 +7,8 @@ How the operator console went from a working prototype to a tool that is calm to
 - [The problem, seen from the booth](#the-problem-seen-from-the-booth)
 - [Design goals](#design-goals)
 - [Low fidelity](#low-fidelity)
-- [From low to high fidelity](#from-low-to-high-fidelity)
-- [Before and after](#before-and-after)
+- [Low fidelity to high fidelity](#low-fidelity-to-high-fidelity)
+- [Design decisions](#design-decisions)
 - [Visual system](#visual-system)
 - [Components](#components)
 - [Accessibility](#accessibility)
@@ -46,53 +46,76 @@ I sketched the layout and the operator's path before touching any styles. These 
 
 ### Layout
 
-![Low-fidelity layout wireframe](design/lofi-layout.svg)
+![Low-fidelity layout wireframe](design/lofi/layout.svg)
 
 Three columns follow the operator's reading order, left to right: what was said, what could go up next, what is up now. This borrows the preview and program idea from broadcast tools, which church media volunteers already know from their mixers and presentation software.
 
 ### Operator flow
 
-![Low-fidelity operator flow](design/lofi-flow.svg)
+![Low-fidelity operator flow](design/lofi/flow.svg)
 
 The main path is five steps and only one of them (pressing `1`) happens during the sermon. The second row covers what happens when something goes wrong, because in a live service those moments decide whether the tool is trusted.
 
-## From low to high fidelity
+## Low fidelity to high fidelity
 
-Each storyboard frame maps to a real screen. The screenshots below are the finished app playing back a recorded session (see [how the screenshots are made](#how-the-screenshots-are-made)).
+Once the layout and flow held up, I drew every screen of the flow in low fidelity, then built each one. The wireframes on the left came first. The screens on the right are the finished app playing back a recorded session (see [how the screenshots are made](#how-the-screenshots-are-made)). Both are the same size, so each region can be compared directly.
 
-| Storyboard frame | Finished screen |
+**1. Before the service.** Nothing is listening yet. Every empty area says what will appear there and how to start.
+
+| Low fidelity | High fidelity |
 |---|---|
-| **1 Set up.** Choose the input device and model once. They are saved for next week, and the panel explains what each choice means. | ![Settings](design/after/7-settings.png) |
-| **2 to 3 Listen, verse detected.** The transcript streams in as a timed log. The heard words ("John 3:16") are underlined and the verse becomes card 1. | ![First detection](design/after/2-first-detection.png) |
-| **3 Queue fills.** Newest first. Card 1 is emphasised. Paraphrases are tied to the transcript lines they came from. | ![Suggestions](design/after/3-suggestions.png) |
-| **4 to 5 Press 1, on screen.** The verse moves to On screen with a red on-air bar. The previous verse moves to Earlier and can be sent again in one click. | ![On screen](design/after/4-on-screen.png) |
-| **Hover to check the source.** Pointing at a card highlights exactly where it came from in the transcript. Here, Isaiah 40:31 and the words "Isaiah 40 verse 31". | ![Hover link](design/after/5-hover-link.png) |
-| **Detection misses.** The operator types the reference. If it cannot be read, the reason appears right under the box, not in a popup. | ![Lookup miss](design/after/6-lookup-miss.png) |
+| ![Idle, wireframe](design/lofi/1-idle.svg) | ![Idle, finished](design/hifi/1-idle.png) |
 
-## Before and after
+**2. The first verse is heard.** The transcript streams in as a timed log. The words that named the verse are underlined, and the verse becomes card 1.
 
-Both sets of screenshots come from the **same recorded session at the same moments**, so the comparison is fair. The "before" is release 1.0.0.
-
-| Before (1.0.0) | After (1.1.0) |
+| Low fidelity | High fidelity |
 |---|---|
-| ![Before: idle](design/before/1-idle.png) | ![After: idle](design/after/1-idle.png) |
-| ![Before: suggestions](design/before/3-suggestions.png) | ![After: suggestions](design/after/3-suggestions.png) |
-| ![Before: on screen](design/before/4-on-screen.png) | ![After: on screen](design/after/4-on-screen.png) |
+| ![First detection, wireframe](design/lofi/2-first-detection.svg) | ![First detection, finished](design/hifi/2-first-detection.png) |
 
-What changed, and why:
+**3. The queue fills.** Newest first, and card 1 always stands out. Quoted verses are tied to the transcript lines they came from with a rule in the margin and a reference tag.
 
-| Before | After | Why |
-|---|---|---|
-| Transcript lines painted in six rotating colours, matched to cards by eye | A timed log. The exact heard words are underlined and tagged with the reference | Colour matching fails with more than a few cards and for colour-blind operators. Words and references do not. |
-| Every card looked the same | Card 1 is larger, lit and carries the accent. Its Send button is the only filled button | The most likely action should be the most visible one. |
-| Verse text in the UI font at 12 px | Verse text in a book serif at 16 to 17 px | Scripture is the content the operator is checking. It should read like a Bible, not like a label. |
-| Confidence as a coloured pill (green, amber, grey) | A three-step bar plus the word | Readable without colour, and in a dark room. |
-| Model, input and endpoint in the header all the time | In a settings panel (`Ctrl+,`) | They are chosen before the service, not during it. Removing them from view cuts the header in half. |
-| Status as coloured dots and an emoji badge | Four named status chips, with optional parts saying they are optional | "LM Studio off" is normal. The old red dot made it look like an error. |
-| "Sent to Screen" as a list of equal cards | On screen: the live verse with an on-air bar, then Earlier | Operators think in preview and program. What is live must be unmistakable. |
-| Floating toast and a red banner that pushed the layout down | A status bar that always holds the last message and the shortcuts | Nothing moves while someone is reading. The shortcuts teach themselves. |
-| A Demo button in the live header | Removed | A live tool should never have a way to show fake verses by accident. The screenshots use a separate harness instead. |
-| Slate and indigo defaults, rounded cards everywhere, emoji | Neutral charcoal, 1 px rules, 4 px radii, one icon set | It should look like a tool that belongs next to broadcast software, not a template. |
+| Low fidelity | High fidelity |
+|---|---|
+| ![Suggestions, wireframe](design/lofi/3-suggestions.svg) | ![Suggestions, finished](design/hifi/3-suggestions.png) |
+
+**4. Press 1, and it is on screen.** The verse moves to On screen with an on-air bar. The one before it moves to Earlier and is one click from going back up.
+
+| Low fidelity | High fidelity |
+|---|---|
+| ![On screen, wireframe](design/lofi/4-on-screen.svg) | ![On screen, finished](design/hifi/4-on-screen.png) |
+
+**5. When detection misses.** The operator types the reference. If it cannot be read, the reason appears right under the box, not in a popup that covers the queue.
+
+| Low fidelity | High fidelity |
+|---|---|
+| ![Lookup miss, wireframe](design/lofi/6-lookup-miss.svg) | ![Lookup miss, finished](design/hifi/6-lookup-miss.png) |
+
+**6. Settings.** Chosen once before the service and saved for next week, so they live in a panel instead of the main view.
+
+| Low fidelity | High fidelity |
+|---|---|
+| ![Settings, wireframe](design/lofi/7-settings.svg) | ![Settings, finished](design/hifi/7-settings.png) |
+
+One detail only exists in high fidelity, because it depends on interaction: pointing at a card highlights where it came from in the transcript. Here, Isaiah 40:31 and the words "Isaiah 40 verse 31".
+
+![Hover link](design/hifi/5-hover-link.png)
+
+## Design decisions
+
+The choices that carried through from the wireframes to the finished app, and the reason for each.
+
+| Decision | Why |
+|---|---|
+| The transcript is a timed log, with the exact heard words underlined and tagged | Matching colours by eye breaks down after a few cards and does not work for colour-blind operators. Words and references do. |
+| Card 1 is larger, lit and carries the accent, and its Send button is the only filled button | The most likely action should be the most visible one. |
+| Verse text is set in a book serif at 16 to 17 px | Scripture is what the operator is checking. It should read like a Bible, not like a label. |
+| Confidence is a three-step bar plus a word | Readable without colour, and in a dark room. |
+| Model, input device and endpoint live in a settings panel (`Ctrl+,`) | They are chosen before the service, not during it, so they should not take space in the main view. |
+| System status is four named chips, and optional parts say they are optional | "LM Studio off" is a normal state. A red dot would make it look like a fault. |
+| On screen shows the live verse with an on-air bar, then Earlier | Media teams think in preview and program. What is live must be unmistakable. |
+| One status bar holds the last message and the shortcuts | Nothing jumps or covers the queue while someone is reading, and the shortcuts teach themselves. |
+| No demo mode inside the app | A live tool should never be one click away from showing made-up verses. Screenshots use a separate harness instead. |
+| Neutral charcoal, 1 px rules, 4 px radii, one icon set, no emoji | It should look like a tool that belongs next to broadcast software, not a template. |
 
 ## Visual system
 
@@ -166,13 +189,11 @@ The demo mode was removed from the app, so screenshots come from a harness inste
 - [`scripts/screenshot-preload.js`](../scripts/screenshot-preload.js) replaces the real preload and replays that session through the same callbacks the main process uses.
 - [`scripts/capture-screenshots.js`](../scripts/capture-screenshots.js) drives the UI like an operator (click Listen, press 3, press 1, hover, type) and saves each state.
 
-To regenerate the "after" set:
+To regenerate the high-fidelity set:
 
 ```bash
 npm run screenshots
 ```
-
-The same harness can load an older build, which is how the "before" set was captured from release 1.0.0. The steps are in [development.md](development.md#screenshots).
 
 ## What I would test next
 

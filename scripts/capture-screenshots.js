@@ -8,9 +8,8 @@
  * captures the window.
  *
  * Usage: npm run screenshots [-- options]
- *   --out <dir>        where to save       (default docs/design/after)
+ *   --out <dir>        where to save       (default docs/design/hifi)
  *   --size 1100x700    window size         (default 1400x860)
- *   --renderer <dir>   another built renderer, e.g. an older release
  *   --only 1,2,3       capture only these numbered shots
  */
 
@@ -23,8 +22,7 @@ const arg = (name) => {
   return i > -1 ? process.argv[i + 1] : null
 }
 
-const OUT_DIR = resolve(arg('--out') || join(__dirname, '..', 'docs', 'design', 'after'))
-const RENDERER = resolve(arg('--renderer') || join(__dirname, '..', 'out', 'renderer'))
+const OUT_DIR = resolve(arg('--out') || join(__dirname, '..', 'docs', 'design', 'hifi'))
 const [WIDTH, HEIGHT] = (arg('--size') || '1400x860').split('x').map(Number)
 const ONLY = arg('--only')?.split(',')
 
@@ -77,16 +75,12 @@ app.whenReady().then(async () => {
     },
   })
   win.webContents.setFrameRate(30)
-  await win.loadFile(join(RENDERER, 'index.html'))
+  await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
   // Entry animations would leave a just-arrived card half transparent.
   await win.webContents.insertCSS('*, *::before, *::after { animation: none !important; }')
 
   for (const step of STEPS) {
-    if (step.run) {
-      // An older renderer may not have every control; skip what is missing.
-      try { await win.webContents.executeJavaScript(step.run) }
-      catch { console.log(`skipped a step: ${step.run.slice(0, 60)}`) }
-    }
+    if (step.run) await win.webContents.executeJavaScript(step.run)
     await wait(step.wait)
     if (step.shot && (!ONLY || ONLY.includes(step.shot.split('-')[0]))) {
       const image = await win.webContents.capturePage()

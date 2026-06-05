@@ -2,7 +2,7 @@
 
 A desktop assistant for the church media desk. It listens to the sermon, recognises Bible verses as they are cited or quoted, and puts the right one on screen with a single keypress.
 
-![The operator console during a service](docs/design/after/4-on-screen.png)
+![The operator console during a service](docs/design/hifi/4-on-screen.png)
 
 ---
 
@@ -28,7 +28,7 @@ That is what this project is. It is built around one person at a desk, in a dim 
 
 ## Contents
 
-- [Before and after](#before-and-after)
+- [From wireframe to app](#from-wireframe-to-app)
 - [How it works](#how-it-works)
 - [Built with](#built-with)
 - [Performance](#performance)
@@ -40,21 +40,21 @@ That is what this project is. It is built around one person at a desk, in a dim 
 
 ---
 
-## Before and after
+## From wireframe to app
 
-The interface was redesigned in version 1.1 after I sketched the operator's flow on paper. Both screenshots show the same recorded session at the same moment.
+Before building the interface I sketched it in low fidelity: where each thing goes and what the operator does, with no colour or styling. Then I built each screen. The wireframe and the finished screen are the same size, so they line up region for region.
 
-| Before (1.0) | After (1.1) |
+| Low fidelity | High fidelity |
 |---|---|
-| ![Before](docs/design/before/4-on-screen.png) | ![After](docs/design/after/4-on-screen.png) |
+| ![Wireframe](docs/design/lofi/4-on-screen.svg) | ![Finished app](docs/design/hifi/4-on-screen.png) |
 
-The low-fidelity wireframes that led from one to the other:
+The overall layout and the operator's flow, including what happens when something goes wrong:
 
 | Layout | Operator flow |
 |---|---|
-| ![Low-fidelity layout](docs/design/lofi-layout.svg) | ![Low-fidelity flow](docs/design/lofi-flow.svg) |
+| ![Low-fidelity layout](docs/design/lofi/layout.svg) | ![Low-fidelity flow](docs/design/lofi/flow.svg) |
 
-The full design story, including what changed and why, is in [docs/design.md](docs/design.md).
+Every screen, side by side, and the reasoning behind each decision are in [docs/design.md](docs/design.md).
 
 ---
 
@@ -199,7 +199,7 @@ Choose your input device in settings (`Ctrl+,`), press **Listen**, and verses wi
 | Guide | For |
 |---|---|
 | [User guide](docs/user-guide.md) | The media team: before, during and after a service |
-| [Design](docs/design.md) | The design process: wireframes, flow, before and after, visual system |
+| [Design](docs/design.md) | The design process: wireframes, flow, low to high fidelity, visual system |
 | [Architecture](docs/architecture.md) | Processes, IPC contract, detection pipeline, failure handling |
 | [Development](docs/development.md) | Setup, scripts, tests, screenshots, Git Flow and releases |
 

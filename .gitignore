@@ -29,6 +29,3 @@ Thumbs.db
 .vscode/
 .idea/
 .claude/
-
-# Scratch builds of older releases (see docs/development.md)
-.verify/
