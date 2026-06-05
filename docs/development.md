@@ -52,7 +52,7 @@ The last step downloads the public-domain KJV and writes `bible-data/kjv.db`. It
 | `npm run build` | Production build into `out/` |
 | `npm test` | Regression checks for detection, lookup and LLM parsing |
 | `npm run eval` | Precision, recall, F1 and latency on the labelled set |
-| `npm run screenshots` | Rebuilds, then captures the UI into `docs/design/after/` |
+| `npm run screenshots` | Rebuilds, then captures the UI into `docs/design/hifi/` |
 | `npm run setup-bible` | Builds the KJV database |
 | `npm run dist:win` | Windows release zip in `dist-electron/` (unsigned) |
 
@@ -100,24 +100,11 @@ Options, passed after `--`:
 
 | Option | Meaning |
 |---|---|
-| `--out <dir>` | Where to save (default `docs/design/after`) |
+| `--out <dir>` | Where to save (default `docs/design/hifi`) |
 | `--size 1100x700` | Window size (default `1400x860`). `1100x700` is the app's minimum. |
-| `--renderer <dir>` | Load another built renderer instead of `out/renderer` |
 | `--only 1,2,3` | Capture only these numbered shots |
 
-The "before" set came from release 1.0.0 like this:
-
-```bash
-mkdir -p .verify && git archive v1.0.0 --prefix=old/ | tar -x -C .verify
-```
-
-```bash
-cd .verify/old && node ../../node_modules/electron-vite/bin/electron-vite.js build
-```
-
-```bash
-npx electron scripts/capture-screenshots.js --renderer .verify/old/out/renderer --only 1,2,3,4 --out docs/design/before
-```
+The low-fidelity wireframes in `docs/design/lofi/` are plain SVG files drawn to the same 1400 by 860 frame, so they can be compared with the captures region by region.
 
 ## Git workflow
 
