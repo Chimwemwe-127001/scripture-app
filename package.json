@@ -1,6 +1,6 @@
 {
   "name": "scripture-app",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Real-time speech-to-scripture assistant for church media operators",
   "main": "./out/main/index.js",
   "scripts": {
