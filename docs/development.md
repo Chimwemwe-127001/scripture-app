@@ -104,7 +104,7 @@ Options, passed after `--`:
 | `--size 1100x700` | Window size (default `1400x860`). `1100x700` is the app's minimum. |
 | `--only 1,2,3` | Capture only these numbered shots |
 
-The low-fidelity wireframes in `docs/design/lofi/` are plain SVG files drawn to the same 1400 by 860 frame, so they can be compared with the captures region by region.
+The low-fidelity wireframes in `docs/design/lofi/` are plain SVG files drawn to the same 1400 by 860 frame, with the same content as the recorded session, so they can be compared with the captures region by region.
 
 ## Git workflow
 
