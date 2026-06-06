@@ -58,7 +58,7 @@ The main path is five steps and only one of them (pressing `1`) happens during t
 
 ## Low fidelity to high fidelity
 
-Once the layout and flow held up, I drew every screen of the flow in low fidelity, then built each one. The wireframes on the left came first. The screens on the right are the finished app playing back a recorded session (see [how the screenshots are made](#how-the-screenshots-are-made)). Both are the same size, so each region can be compared directly.
+Once the layout and flow held up, I drew every screen of the flow in low fidelity, then built each one. The wireframes use the real words from a recorded session, so each one shows what goes where, but nothing about how it looks. They came first, on the left. The screens on the right are the finished app playing back a recorded session (see [how the screenshots are made](#how-the-screenshots-are-made)). Both are the same size, so each region can be compared directly.
 
 **1. Before the service.** Nothing is listening yet. Every empty area says what will appear there and how to start.
 
