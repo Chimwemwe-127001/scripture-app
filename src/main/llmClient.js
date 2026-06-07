@@ -90,7 +90,10 @@ class LlmClient {
 
     const modelId = await this._getModelId()
     if (!modelId) {
-      this._lastError = 'No chat model loaded in LM Studio'
+      // LM Studio is optional. When it is not running, or has no chat model
+      // loaded, the status chip already says so; reporting it as an error on
+      // every chunk would only bury real problems.
+      this._lastError = null
       return []
     }
 
@@ -140,7 +143,13 @@ class LlmClient {
         })
       } catch (err) {
         log.error('llm', 'Request failed', { attempt, error: err.message })
-        if (attempt === MAX_RETRIES) { this._lastError = err.message; return [] }
+        if (attempt === MAX_RETRIES) {
+          // LM Studio went away mid-session. Report it once, then forget the
+          // model so later chunks take the quiet path above until it is back.
+          this._lastError = err.message
+          this._modelId = null
+          return []
+        }
         continue
       }
 
