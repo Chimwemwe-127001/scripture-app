@@ -82,9 +82,9 @@ docs/                       Design, architecture, user and development guides
 
 ## Tests and evaluation
 
-`npm test` runs 41 checks on the pure parts that carry the most risk: book names, extraction, confidence levels, the heard phrase, parsing of cut-off LLM output, range capping, and transcript-to-verse lookups. Lookup checks are skipped if the database has not been built.
+`npm test` runs 44 checks on the pure parts that carry the most risk: book names, extraction (including the way Whisper writes references), confidence levels, the heard phrase, parsing of cut-off LLM output, range capping, and transcript-to-verse lookups. Lookup checks are skipped if the database has not been built.
 
-`npm run eval` scores the regex path on [`scripts/eval-set.json`](../scripts/eval-set.json), 62 hand-labelled utterances including known-hard cases and ordinary speech that looks like a reference. It prints Markdown tables that are pasted into the README as they are.
+`npm run eval` scores the regex path on [`scripts/eval-set.json`](../scripts/eval-set.json), 66 hand-labelled utterances including known-hard cases, lines copied from a live transcription, and ordinary speech that looks like a reference. It prints Markdown tables that are pasted into the README as they are.
 
 Both run in CI on every push to `main` and `develop`.
 

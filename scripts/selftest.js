@@ -79,6 +79,13 @@ check('bare space = medium', confs('John 3 16'), ['John 3:16[medium]'])
 check('bare chapter = low', confs('open to Romans 8'), ['Romans 8[low]'])
 check('inverted range dropped', refs('John 3:16-2'), ['John 3:16'])
 
+group('Extraction: how Whisper actually writes references')
+// Both taken from a live run: Whisper wrote "three sixteen" as 3.16 and
+// "eight twenty-eight" as 8-28.
+check('full stop = medium',  confs('turn with me to John 3.16, For God'), ['John 3:16[medium]'])
+check('hyphen = medium',     confs('And Romans 8-28 tells us'), ['Romans 8:28[medium]'])
+check('sentence end is not a verse', confs('turn to Romans 8. Then we pray'), ['Romans 8[low]'])
+
 // ---------------------------------------------------------------------------
 group('LLM response parsing')
 // ---------------------------------------------------------------------------

@@ -27,9 +27,13 @@ const PATTERN = new RegExp(
   `\\b(${BOOK_ALT})` +
   // Optional "chapter" filler word, then the chapter number
   `\\s+(?:chapter\\s+)?(\\d{1,3})\\b` +
-  // Optionally a verse, introduced by ':' / 'verse' / 'v' / bare whitespace
+  // Optionally a verse, introduced by ':' / 'verse' / 'v' / ',' / whitespace...
   `(?:` +
-    `\\s*(:|verses?|vv?\\.?|,)?\\s*` +
+    `(?:\\s*(:|verses?|vv?\\.?|,)\\s*|\\s+` +
+    // ...or by '.' or '-' with no spaces, which is how Whisper often writes a
+    // spoken "three sixteen" ("John 3.16", "Romans 8-28"). Requiring no spaces
+    // keeps a sentence that ends "Romans 8. Then..." from becoming 8:1.
+    `|([.\\-\\u2013]))` +
     `(\\d{1,3})\\b` +
     // Optionally a range end
     `(?:\\s*(?:[-\\u2013\\u2014]|through|thru|to)\\s*(\\d{1,3})\\b)?` +
@@ -68,9 +72,9 @@ function extract(text) {
     const chapter = parseInt(match[2], 10)
     if (!chapter || chapter < 1) continue
 
-    const separator  = match[3] || ''
-    const verseStart = match[4] ? parseInt(match[4], 10) : null
-    const verseEnd   = match[5] ? parseInt(match[5], 10) : null
+    const separator  = match[3] || match[4] || ''
+    const verseStart = match[5] ? parseInt(match[5], 10) : null
+    const verseEnd   = match[6] ? parseInt(match[6], 10) : null
 
     let confidence
     let isChapterOnly = false
@@ -87,8 +91,9 @@ function extract(text) {
       // "John 3:16" or "John 3 verse 16": unambiguous.
       confidence = 'high'
     } else {
-      // "John 3 16". Whisper often drops the colon, so this is still worth
-      // showing, but it is a weaker signal than an explicit separator.
+      // "John 3 16", "John 3.16", "Romans 8-28". Whisper often drops or
+      // changes the colon, so these are worth showing, but they are a weaker
+      // signal than an explicit separator.
       confidence = 'medium'
     }
 

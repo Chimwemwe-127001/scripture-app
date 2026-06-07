@@ -1,5 +1,5 @@
 {
-  "description": "Hand-labelled sermon utterances written in the style of Whisper output. 'refs' is the gold standard: every reference a human operator would expect to see. Hard cases are included on purpose so the scores reflect real weaknesses.",
+  "description": "Hand-labelled sermon utterances in the style of Whisper output. The whisper punctuation items are copied from a live transcription. 'refs' is the gold standard: every reference a human operator would expect to see. Hard cases are included on purpose so the scores reflect real weaknesses.",
   "items": [
     { "category": "colon",        "text": "turn with me to John 3:16", "refs": ["John 3:16"] },
     { "category": "colon",        "text": "open your bibles to Romans 8:28", "refs": ["Romans 8:28"] },
@@ -53,9 +53,14 @@
     { "category": "bare chapter", "text": "Hebrews 11 is the great faith chapter", "refs": ["Hebrews 11"] },
     { "category": "bare chapter", "text": "turn to first Corinthians 13", "refs": ["1 Corinthians 13"] },
 
+    { "category": "whisper punctuation", "text": "John 3.16 for God so loved the world", "refs": ["John 3:16"] },
+    { "category": "whisper punctuation", "text": "Church, please turn with me to John 3.16, For God so loved the world.", "refs": ["John 3:16"] },
+    { "category": "whisper punctuation", "text": "And Romans 8-28 tells us that all things work together for good", "refs": ["Romans 8:28"] },
+    { "category": "whisper punctuation", "text": "Isaiah 40.31 they that wait upon the Lord shall renew their strength", "refs": ["Isaiah 40:31"] },
+    { "category": "whisper punctuation", "text": "Herefor good, to them that love God. Let us also read Psalm 23 verse 1.", "refs": ["Psalms 23:1"] },
+
     { "category": "hard",         "text": "John three sixteen", "refs": ["John 3:16"] },
     { "category": "hard",         "text": "Romans chapter eight verse one there is therefore now no condemnation", "refs": ["Romans 8:1"] },
-    { "category": "hard",         "text": "John 3.16 for God so loved the world", "refs": ["John 3:16"] },
     { "category": "hard",         "text": "Jude verse 24 now unto him that is able", "refs": ["Jude 1:24"] },
 
     { "category": "negative",     "text": "I want to mark 3 things this morning", "refs": [] },
