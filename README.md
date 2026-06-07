@@ -108,14 +108,14 @@ Reference detection is scored like an information-retrieval task, with precision
 - **Recall**: of the verses actually cited, how many the app found.
 - **F1**: the balance of the two.
 
-The test set ([`scripts/eval-set.json`](scripts/eval-set.json)) is 62 sentences I labelled by hand, written the way Whisper outputs speech. It includes cases I know the rules miss and ordinary sentences that only look like references ("I want to mark 3 things"), so the score is not flattering. Run it with `npm run eval`.
+The test set ([`scripts/eval-set.json`](scripts/eval-set.json)) is 66 sentences I labelled by hand, written the way Whisper outputs speech. It includes cases I know the rules miss and ordinary sentences that only look like references ("I want to mark 3 things"), so the score is not flattering. Run it with `npm run eval`.
 
 ### Results (rule-based path)
 
 | Stage | Precision | Recall | F1 | TP | FP | FN |
 |---|---|---|---|---|---|---|
-| Extraction (regex) | 89.8% | 88.0% | 88.9% | 44 | 5 | 6 |
-| Validated (regex + KJV lookup) | 91.7% | 88.0% | 89.8% | 44 | 4 | 6 |
+| Extraction (regex) | 90.7% | 90.7% | 90.7% | 49 | 5 | 5 |
+| Validated (regex + KJV lookup) | 92.5% | 90.7% | 91.6% | 49 | 4 | 5 |
 
 False alarms on ordinary speech: 2 of 14 sentences (14.3%).
 
@@ -129,16 +129,19 @@ False alarms on ordinary speech: 2 of 14 sentences (14.3%).
 | several in one sentence | 4 | 4 | 100.0% |
 | abbreviation ("Rev 21:4") | 3 | 3 | 100.0% |
 | bare chapter ("Psalm 23") | 3 | 3 | 100.0% |
-| hard cases | 4 | 0 | 0.0% |
+| Whisper punctuation ("John 3.16", "Romans 8-28") | 5 | 5 | 100.0% |
+| hard cases | 3 | 0 | 0.0% |
 
-**Where it goes wrong.** The misses are numbers spoken as words ("John three sixteen"), a full stop instead of a colon ("John 3.16"), ranges joined with "and" ("verses 8 and 9"), and one-chapter books cited by verse only ("Jude verse 24"). The two false alarms are "numbers 4 5 and 6" and "call Daniel 4 times", where a book name is also an everyday word. Each has a clear fix, listed [below](#limitations-and-what-is-next).
+**What a live run taught me.** When I first ran the app with real speech, Whisper wrote "John three sixteen" as `John 3.16` and "Romans eight twenty-eight" as `Romans 8-28`. The detector missed the first and offered Romans 8:1 for the second, which is exactly the kind of wrong verse that must never reach the screen. Those lines are now in the test set as "Whisper punctuation". Before the fix they scored 1 of 5; after it, 5 of 5.
+
+**Where it still goes wrong.** The misses are numbers spoken as words ("John three sixteen"), ranges joined with "and" ("verses 8 and 9"), and one-chapter books cited by verse only ("Jude verse 24"). The two false alarms are "numbers 4 5 and 6" and "call Daniel 4 times", where a book name is also an everyday word. Each has a clear fix, listed [below](#limitations-and-what-is-next).
 
 ### Speed
 
 | Stage (1000 runs) | p50 | p95 |
 |---|---|---|
-| Regex extraction per line | 1.1 µs | 3.4 µs |
-| KJV lookup per reference | 39.3 µs | 128.7 µs |
+| Regex extraction per line | 1.0 µs | 2.1 µs |
+| KJV lookup per reference | 32.1 µs | 79.9 µs |
 
 Detection adds well under a millisecond. The time from speech to card is dominated by audio buffering and Whisper. This budget is estimated from the configuration, not yet measured in a live service:
 
@@ -150,7 +153,7 @@ Detection adds well under a millisecond. The time from speech to card is dominat
 | Detection and lookup | < 1 ms | < 1 ms |
 | **Total** | **about 8 to 12 s** | **about 10 to 22 s** |
 
-`npm test` runs 41 regression checks, all passing.
+`npm test` runs 44 regression checks, all passing.
 
 ---
 
@@ -160,10 +163,10 @@ How I judge whether the tool is good enough for a service. Response-time targets
 
 | # | Criterion | How it is measured | Target | Result | Status |
 |---|---|---|---|---|---|
-| 1 | Finds named verses | F1 on the labelled set | 85% or more | 89.8% | Met |
+| 1 | Finds named verses | F1 on the labelled set | 85% or more | 91.6% | Met |
 | 2 | Ignores ordinary speech | Share of plain sentences that produce a card | 10% or less | 14.3% (2 of 14) | Not yet met |
-| 3 | Correct verse text | Every card must exist in the KJV, checked by `npm test` | 100% | 41 of 41 checks pass | Met |
-| 4 | Detection speed | p95 of detection plus lookup | Under 100 ms | about 0.13 ms | Met |
+| 3 | Correct verse text | Every card must exist in the KJV, checked by `npm test` | 100% | 44 of 44 checks pass | Met |
+| 4 | Detection speed | p95 of detection plus lookup | Under 100 ms | about 0.08 ms | Met |
 | 5 | Speech to screen | Stage budget above | 10 s or less for named verses | about 8 to 12 s (estimate) | Partly met |
 | 6 | Keeps going when parts fail | LM Studio off, VideoPsalm hung, Whisper behind | No single failure stops detection | Each case handled and logged ([details](docs/architecture.md#failure-handling)) | Met |
 | 7 | Privacy | Where audio and text go | Never leaves the machine | All local by design | Met |
@@ -207,7 +210,7 @@ Choose your input device in settings (`Ctrl+,`), press **Listen**, and verses wi
 
 ## Limitations and what is next
 
-- **Close the known gaps.** Parse numbers spoken as words, accept `.` as a separator, read "verses 8 and 9" as a range, and treat "Jude verse 24" as chapter 1. These cover every miss in the evaluation.
+- **Close the known gaps.** Parse numbers spoken as words, read "verses 8 and 9" as a range, and treat "Jude verse 24" as chapter 1. These cover every miss in the evaluation.
 - **Fewer false alarms.** Require a verse number for "Numbers" and "Daniel", like "Mark" and "Job" already do.
 - **Faster transcription.** Move from `openai-whisper` to `faster-whisper` or `whisper.cpp` to cut the delay and allow a shorter audio window.
 - **Measure it in a real service.** Record, label and score the paraphrase path and the true speech-to-screen time.
