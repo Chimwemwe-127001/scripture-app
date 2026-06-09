@@ -2,434 +2,400 @@
 """
 Whisper worker: real-time speech-to-text for the Electron main process.
 
-Captures microphone audio in overlapping windows, runs local OpenAI Whisper
-inference (Radford et al., 2022) and writes one JSON message per line to
-stdout.
+Audio comes from the microphone (or from a file, for evaluation). Silero voice
+activity detection cuts it into utterances at natural pauses, and each
+utterance is transcribed once by faster-whisper, on the GPU when there is one.
+Nothing that is not speech ever reaches the model, which is where Whisper
+invents text.
 
-Message types emitted to stdout:
-{"type":"status",     "message":"...", "ready":bool, "listening":bool}
-{"type":"transcript", "text":"...",    "is_final":true}
+Messages, one JSON object per line on stdout:
+{"type":"status",     "message":"...", "ready":bool, "listening":bool, "model":..., "device":...}
+{"type":"partial",    "text":"..."}                     words of the utterance still being spoken
+{"type":"transcript", "text":"...", "is_final":true, "start":s, "end":s, "decode_ms":n, "latency_ms":n}
 {"type":"warning",    "message":"..."}
 {"type":"error",      "message":"..."}
+
+Write "stop" to stdin to end the session cleanly.
 """
 
-import sys
-import json
-import time
 import argparse
-import threading
+import glob
+import importlib.util
+import json
+import os
 import queue
+import sys
+import threading
+import time
 
 import numpy as np
 
+SAMPLE_RATE = 16000
+FRAME = 512                 # Silero VAD works on 32 ms frames at 16 kHz
+CONTEXT = 64                # samples of the previous frame the model also sees
 
-# Whisper hallucinates on silence and noise, typically inventing phrases such
-# as "Thank you for watching". Segments are kept only when Whisper itself is
-# confident that they contain speech.
-NO_SPEECH_MAX = 0.5      # drop a segment if P(no speech) is at or above this
-AVG_LOGPROB_MIN = -0.8   # drop a segment if its mean token log-probability is below this
-MIN_TEXT_CHARS = 4       # ignore fragments such as "Oh." or "Um"
+# Voice detection, with hysteresis so a short dip between words does not end
+# an utterance.
+SPEECH_ON = 0.5
+SPEECH_OFF = 0.35
+PRE_ROLL_SECS = 0.3         # audio kept from just before speech starts
+
+# Initial prompt: one plain sentence of context. It nudges Whisper towards
+# church vocabulary and the "John 3:16" way of writing references, without a
+# long word list that the model can echo back on silence.
+PROMPT = "A church sermon with Bible readings, such as John 3:16 and Romans 8:28."
+
+# Whole-utterance phrases Whisper is known to invent from noise. Only an exact
+# match of the entire utterance is dropped, so a real "thank you" survives.
+KNOWN_HALLUCINATIONS = {
+    "thank you for watching", "thanks for watching", "please subscribe",
+    "subscribe to my channel", "like and subscribe", "you",
+}
+
+# Default model per device. Large models are only usable on a GPU.
+DEFAULT_MODEL = {"cuda": "distil-large-v3.5", "cpu": "small.en"}
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def emit(obj: dict):
-    """Write a JSON line to stdout so Node.js can parse it."""
+def emit(obj):
     print(json.dumps(obj, ensure_ascii=False), flush=True)
 
 
-def load_whisper():
-    try:
-        import whisper  # openai-whisper
-        return whisper
-    except ImportError:
-        emit({
-            "type": "error",
-            "message": "openai-whisper is not installed. Run: pip install openai-whisper"
-        })
-        sys.exit(1)
+# ---------------------------------------------------------------------------
+# GPU setup
+# ---------------------------------------------------------------------------
+
+def add_nvidia_dll_dirs():
+    """The NVIDIA pip wheels keep their DLLs in site-packages/nvidia/*/bin,
+    which Windows does not search by default."""
+    if os.name != "nt":
+        return
+    spec = importlib.util.find_spec("nvidia")
+    for root in (spec.submodule_search_locations if spec else []):
+        for d in glob.glob(os.path.join(root, "*", "bin")):
+            os.add_dll_directory(d)
+            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
 
 
-def load_sounddevice():
+def load_model(name, device):
+    """Load a faster-whisper model, falling back from GPU to CPU if needed.
+    Returns (model, model_name, device, compute_type)."""
+    add_nvidia_dll_dirs()
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")   # harmless on Windows
+    # Newer GPUs compile some kernels on first use. A bigger driver cache keeps
+    # them between sessions, so only the very first run pays for it.
+    os.environ.setdefault("CUDA_CACHE_MAXSIZE", str(2 * 1024 ** 3))
+
+    import ctranslate2
+    from faster_whisper import WhisperModel
+
+    if device == "auto":
+        device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+
+    attempts = [(device, "int8_float16" if device == "cuda" else "int8")]
+    if device == "cuda":
+        attempts.append(("cpu", "int8"))
+
+    for dev, compute in attempts:
+        model_name = DEFAULT_MODEL[dev] if name == "auto" else name
+        try:
+            model = WhisperModel(model_name, device=dev, compute_type=compute)
+            return model, model_name, dev, compute
+        except Exception as exc:
+            if dev == "cpu":
+                raise
+            emit({"type": "warning",
+                  "message": f"GPU unavailable ({exc}). Falling back to the CPU."})
+
+
+def warm_up(model):
+    """Decode one second of quiet noise so any one-time GPU kernel compilation
+    happens now, during "Loading model", and not on the first verse."""
+    noise = (np.random.default_rng(0).standard_normal(SAMPLE_RATE) * 1e-3).astype(np.float32)
+    segments, _ = model.transcribe(noise, language="en", beam_size=1, vad_filter=False,
+                                   without_timestamps=True)
+    list(segments)
+
+
+# ---------------------------------------------------------------------------
+# Voice detection and segmentation
+# ---------------------------------------------------------------------------
+
+class StreamingVad:
+    """Silero VAD run one 32 ms frame at a time, keeping its state between
+    frames. Uses the ONNX model that ships with faster-whisper."""
+
+    def __init__(self):
+        import onnxruntime
+        from faster_whisper.utils import get_assets_path
+
+        opts = onnxruntime.SessionOptions()
+        opts.inter_op_num_threads = 1
+        opts.intra_op_num_threads = 1
+        opts.log_severity_level = 4
+        self.session = onnxruntime.InferenceSession(
+            os.path.join(get_assets_path(), "silero_vad_v6.onnx"),
+            providers=["CPUExecutionProvider"], sess_options=opts)
+        self.h = np.zeros((1, 1, 128), dtype=np.float32)
+        self.c = np.zeros((1, 1, 128), dtype=np.float32)
+        self.context = np.zeros(CONTEXT, dtype=np.float32)
+
+    def __call__(self, frame):
+        x = np.concatenate([self.context, frame])[None, :]
+        out, self.h, self.c = self.session.run(None, {"input": x, "h": self.h, "c": self.c})
+        self.context = frame[-CONTEXT:]
+        return float(np.asarray(out).reshape(-1)[-1])
+
+
+class Segmenter:
+    """Turns a stream of frames into utterances.
+
+    An utterance ends after `min_silence` seconds without speech. A long
+    sentence is cut at the first brief dip after `soft_max` seconds, and always
+    by `hard_max`, so text keeps flowing while someone reads a long passage.
+    """
+
+    def __init__(self, min_silence, soft_max, hard_max):
+        self.vad = StreamingVad()
+        self.min_silence = int(min_silence * SAMPLE_RATE / FRAME)
+        self.soft_max = int(soft_max * SAMPLE_RATE / FRAME)
+        self.hard_max = int(hard_max * SAMPLE_RATE / FRAME)
+        self.pre_roll = []
+        self.frames = []
+        self.speaking = False
+        self.silent = 0
+        self.position = 0          # frames seen so far
+        self.start = 0             # first frame of the current utterance
+        self.last_speech_time = 0.0
+
+    def push(self, frame, arrived):
+        """Feed one frame. Returns a finished utterance or None.
+        An utterance is (audio, start_secs, end_secs, end_of_speech_wall_time)."""
+        prob = self.vad(frame)
+        self.position += 1
+
+        if not self.speaking:
+            self.pre_roll = (self.pre_roll + [frame])[-int(PRE_ROLL_SECS * SAMPLE_RATE / FRAME):]
+            if prob >= SPEECH_ON:
+                self.speaking = True
+                self.frames = list(self.pre_roll)
+                self.start = self.position - len(self.frames)
+                self.silent = 0
+                self.last_speech_time = arrived
+            return None
+
+        self.frames.append(frame)
+        if prob >= SPEECH_OFF:
+            self.silent = 0
+            self.last_speech_time = arrived
+        else:
+            self.silent += 1
+
+        length = len(self.frames)
+        if (self.silent >= self.min_silence
+                or (length >= self.soft_max and prob < SPEECH_ON)
+                or length >= self.hard_max):
+            return self._finish()
+        return None
+
+    def current(self):
+        """Audio of the utterance in progress, for partial results."""
+        return np.concatenate(self.frames) if self.speaking and self.frames else None
+
+    def _finish(self):
+        # Keep a little of the trailing silence; drop the rest.
+        keep = len(self.frames) - max(0, self.silent - 6)
+        audio = np.concatenate(self.frames[:keep])
+        start = self.start * FRAME / SAMPLE_RATE
+        end = (self.start + keep) * FRAME / SAMPLE_RATE
+        utterance = (audio, start, end, self.last_speech_time)
+        self.speaking = False
+        self.frames = []
+        self.pre_roll = []
+        self.silent = 0
+        return utterance
+
+
+# ---------------------------------------------------------------------------
+# Transcription
+# ---------------------------------------------------------------------------
+
+def transcribe(model, audio, beam_size):
+    """Transcribe one utterance. Returns the confident text only."""
+    segments, _ = model.transcribe(
+        audio,
+        language="en",
+        beam_size=beam_size,
+        vad_filter=False,                  # already segmented by our own VAD
+        condition_on_previous_text=False,  # one bad line cannot seed the next
+        initial_prompt=PROMPT,
+        without_timestamps=True,
+        no_speech_threshold=0.6,
+        log_prob_threshold=-1.0,
+        compression_ratio_threshold=2.4,
+    )
+    parts = [s.text.strip() for s in segments
+             if not (s.no_speech_prob > 0.6 and s.avg_logprob < -0.8)]
+    text = " ".join(" ".join(parts).split())
+    if text.lower().strip(" .!?,") in KNOWN_HALLUCINATIONS:
+        return ""
+    return text
+
+
+# ---------------------------------------------------------------------------
+# Audio sources
+# ---------------------------------------------------------------------------
+
+def microphone_frames(device_index, stop, max_queue_secs):
+    """Yield (frame, arrival_time) from the microphone. A bounded queue drops
+    the oldest audio if processing ever falls behind, so latency stays bounded."""
     try:
         import sounddevice as sd
-        return sd
     except ImportError:
-        emit({
-            "type": "error",
-            "message": "sounddevice is not installed. Run: pip install sounddevice"
-        })
+        emit({"type": "error", "message": "sounddevice is not installed. Run: pip install -r python/requirements.txt"})
         sys.exit(1)
 
+    q = queue.Queue(maxsize=max(8, int(max_queue_secs * SAMPLE_RATE / FRAME)))
+    dropped = {"count": 0, "warned": 0.0}
 
-def rms(audio: np.ndarray) -> float:
-    """Root-mean-square loudness for simple voice activity detection."""
-    if audio.size == 0:
-        return 0.0
-    return float(np.sqrt(np.mean(np.square(audio.astype(np.float32)))))
-
-
-def normalize_audio(audio: np.ndarray, peak_target: float = 0.95) -> np.ndarray:
-    """
-    Normalize audio safely.
-
-    Whisper expects float32 mono audio roughly in the range [-1, 1].
-    Normalizing helps when microphone volume changes or speech gets quieter.
-    """
-    audio = audio.astype(np.float32).flatten()
-
-    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
-    if peak > 0:
-        audio = (audio / peak) * peak_target
-
-    return np.clip(audio, -1.0, 1.0)
-
-
-def clean_text(text: str) -> str:
-    """Light cleanup for common whitespace/newline artifacts."""
-    return " ".join((text or "").strip().split())
-
-
-def confident_text(result: dict) -> str:
-    """Join only the segments Whisper is confident contain real speech."""
-    parts = [
-        seg.get("text", "")
-        for seg in result.get("segments", [])
-        if seg.get("no_speech_prob", 1.0) < NO_SPEECH_MAX
-        and seg.get("avg_logprob", -999.0) > AVG_LOGPROB_MIN
-    ]
-    return clean_text(" ".join(parts))
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Whisper real-time transcription worker"
-    )
-
-    parser.add_argument(
-        "--model",
-        default="small",
-        choices=["tiny", "base", "small", "medium", "large-v3"],
-        help="Whisper model. small is the best CPU trade-off; larger models need a GPU."
-    )
-
-    parser.add_argument(
-        "--device-index",
-        type=int,
-        default=None,
-        help="sounddevice input device index. Omit for system default."
-    )
-
-    parser.add_argument(
-        "--sample-rate",
-        type=int,
-        default=16000,
-        help="Whisper works well at 16 kHz mono audio."
-    )
-
-    parser.add_argument(
-        "--chunk-secs",
-        type=float,
-        default=6.0,
-        help="Audio window fed to Whisper. Longer windows improve context and accuracy."
-    )
-
-    parser.add_argument(
-        "--overlap-secs",
-        type=float,
-        default=1.5,
-        help="Overlap kept after each chunk to avoid clipped words at boundaries."
-    )
-
-    parser.add_argument(
-        "--vad-threshold",
-        type=float,
-        default=0.005,
-        help="RMS energy gate. Use 0 to disable. Lower values avoid skipping quiet speech."
-    )
-
-    parser.add_argument(
-        "--language",
-        default="en",
-        help="Force language, e.g. en. Use auto to let Whisper detect language."
-    )
-
-    parser.add_argument(
-        "--initial-prompt",
-        default=(
-            "Bible passages, scripture reading, sermon, church service, "
-            "Genesis, Exodus, Leviticus, Numbers, Deuteronomy, Joshua, Judges, Ruth, "
-            "Samuel, Kings, Chronicles, Ezra, Nehemiah, Esther, Job, Psalms, Proverbs, "
-            "Ecclesiastes, Song of Solomon, Isaiah, Jeremiah, Lamentations, Ezekiel, Daniel, "
-            "Hosea, Joel, Amos, Obadiah, Jonah, Micah, Nahum, Habakkuk, Zephaniah, "
-            "Haggai, Zechariah, Malachi, Matthew, Mark, Luke, John, Acts, Romans, "
-            "Corinthians, Galatians, Ephesians, Philippians, Colossians, Thessalonians, "
-            "Timothy, Titus, Philemon, Hebrews, James, Peter, John, Jude, Revelation."
-        ),
-        help="Context prompt to bias Whisper toward expected vocabulary."
-    )
-
-    parser.add_argument(
-        "--beam-size",
-        type=int,
-        default=5,
-        help="Higher beam size can improve accuracy but uses more compute."
-    )
-
-    parser.add_argument(
-        "--temperature",
-        type=float,
-        default=0.0,
-        help="0 gives deterministic, usually more stable transcription."
-    )
-
-    parser.add_argument(
-        "--fp16",
-        action="store_true",
-        help="Use FP16 inference. Enable only if your GPU supports it well."
-    )
-
-    parser.add_argument(
-        "--max-queue-secs",
-        type=float,
-        default=20.0,
-        help=(
-            "Maximum seconds of audio held pending transcription. Once full, "
-            "the oldest audio is dropped so latency stays bounded instead of "
-            "growing without limit when inference runs slower than real time."
-        )
-    )
-
-    parser.add_argument(
-        "--blocksize",
-        type=int,
-        default=1024,
-        help="Frames per audio callback. Used to size the pending-audio queue."
-    )
-
-    args = parser.parse_args()
-
-    if args.overlap_secs >= args.chunk_secs:
-        emit({
-            "type": "error",
-            "message": "--overlap-secs must be smaller than --chunk-secs"
-        })
-        sys.exit(1)
-
-    whisper = load_whisper()
-    sd = load_sounddevice()
-
-    emit({
-        "type": "status",
-        "message": f"Loading Whisper model: {args.model}",
-        "ready": False,
-        "listening": False
-    })
-
-    try:
-        model = whisper.load_model(args.model)
-    except Exception as exc:
-        emit({
-            "type": "error",
-            "message": f"Failed to load Whisper model '{args.model}': {exc}"
-        })
-        sys.exit(1)
-
-    sample_rate = int(args.sample_rate)
-    chunk_samples = int(args.chunk_secs * sample_rate)
-    overlap_samples = int(args.overlap_secs * sample_rate)
-    step_samples = chunk_samples - overlap_samples
-
-    # ------------------------------------------------------------------
-    # Bounded queue with drop-oldest backpressure.
-    #
-    # The audio callback fills the queue in real time. If inference is slower
-    # than real time (common for medium or large-v3 on CPU), an unbounded
-    # queue would grow for the whole service and the transcript would fall
-    # further and further behind. Dropping the oldest audio keeps latency
-    # bounded: losing a few seconds is better than being minutes late.
-    # ------------------------------------------------------------------
-    max_queue_blocks = max(8, int(args.max_queue_secs * sample_rate / max(1, args.blocksize or 1024)))
-    audio_q = queue.Queue(maxsize=max_queue_blocks)
-    stop_event = threading.Event()
-
-    drop_stats = {"dropped": 0, "last_warned": 0.0}
-
-    def audio_callback(indata, frames, time_info, status):
-        if status:
-            emit({
-                "type": "warning",
-                "message": str(status)
-            })
-
-        block = np.asarray(indata, dtype=np.float32)
-
-        # Convert stereo/multi-channel input to mono.
-        if block.ndim > 1:
-            block = np.mean(block, axis=1)
-
+    def callback(indata, frames, time_info, status):
+        block = np.asarray(indata, dtype=np.float32).reshape(-1)
         try:
-            audio_q.put_nowait(block.copy())
+            q.put_nowait((block.copy(), time.monotonic()))
         except queue.Full:
-            # Transcription is behind. Evict the oldest block so the buffer
-            # follows the present rather than a growing backlog.
             try:
-                audio_q.get_nowait()
-                audio_q.put_nowait(block.copy())
+                q.get_nowait()
+                q.put_nowait((block.copy(), time.monotonic()))
             except (queue.Empty, queue.Full):
                 pass
-
-            drop_stats["dropped"] += 1
-
-            # Surface it, but at most once every 10 s so the UI is not flooded.
+            dropped["count"] += 1
             now = time.monotonic()
-            if now - drop_stats["last_warned"] > 10.0:
-                drop_stats["last_warned"] = now
-                emit({
-                    "type": "warning",
-                    "message": (
-                        f"Transcription is falling behind. Dropped "
-                        f"{drop_stats['dropped']} audio blocks. "
-                        f"Switch to a smaller Whisper model for lower latency."
-                    )
-                })
+            if now - dropped["warned"] > 10:
+                dropped["warned"] = now
+                emit({"type": "warning",
+                      "message": f"Transcription is falling behind. Dropped {dropped['count']} audio blocks."})
 
-    def transcriber_loop():
-        buffer = np.empty(0, dtype=np.float32)
-        previous_text = ""
-
-        while not stop_event.is_set():
+    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32",
+                        blocksize=FRAME, device=device_index, callback=callback):
+        while not stop.is_set():
             try:
-                block = audio_q.get(timeout=0.25)
-                buffer = np.concatenate([buffer, block])
+                yield q.get(timeout=0.25)
             except queue.Empty:
                 continue
 
-            while buffer.size >= chunk_samples:
-                chunk = buffer[:chunk_samples]
 
-                # Keep overlap for the next window.
-                buffer = buffer[step_samples:]
+def file_frames(path, start_secs, end_secs):
+    """Yield (frame, time) from an audio file, as fast as it can be decoded.
+    Used by scripts/eval_asr.py to measure the same pipeline the app uses."""
+    import av
 
-                loudness = rms(chunk)
-                if args.vad_threshold > 0 and loudness < args.vad_threshold:
+    resampler = av.AudioResampler(format="flt", layout="mono", rate=SAMPLE_RATE)
+    pending = np.zeros(0, dtype=np.float32)
+    first = int(start_secs * SAMPLE_RATE)
+    last = int(end_secs * SAMPLE_RATE) if end_secs else None
+    seen = 0
+    with av.open(path) as container:
+        for packet_frame in container.decode(audio=0):
+            for out in resampler.resample(packet_frame):
+                pending = np.concatenate([pending, out.to_ndarray().reshape(-1)])
+            while len(pending) >= FRAME:
+                frame, pending = pending[:FRAME], pending[FRAME:]
+                seen += FRAME
+                if seen <= first:
                     continue
+                if last is not None and seen > last:
+                    return
+                yield frame, time.monotonic()
 
-                audio = normalize_audio(chunk)
 
-                transcribe_kwargs = {
-                    "task": "transcribe",
-                    "temperature": args.temperature,
-                    "beam_size": args.beam_size,
-                    # Each window is transcribed on its own. Conditioning on
-                    # earlier output lets one hallucination repeat in a loop.
-                    "condition_on_previous_text": False,
-                    "no_speech_threshold": NO_SPEECH_MAX,
-                    "logprob_threshold": AVG_LOGPROB_MIN,
-                    "compression_ratio_threshold": 2.4,   # rejects repetitive output
-                    "initial_prompt": args.initial_prompt,
-                    "fp16": bool(args.fp16),
-                    "verbose": False,
-                }
+# ---------------------------------------------------------------------------
+# Main loop
+# ---------------------------------------------------------------------------
 
-                language = (args.language or "").strip()
-                if language and language.lower() != "auto":
-                    transcribe_kwargs["language"] = language
+def main():
+    p = argparse.ArgumentParser(description="Real-time transcription worker")
+    p.add_argument("--model", default="auto",
+                   help="auto, distil-large-v3.5, large-v3-turbo, small.en, ...")
+    p.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
+    p.add_argument("--device-index", type=int, default=None, help="sounddevice input index")
+    p.add_argument("--beam-size", type=int, default=5)
+    p.add_argument("--min-silence", type=float, default=0.5, help="pause that ends an utterance (s)")
+    p.add_argument("--soft-max", type=float, default=8.0, help="cut a long utterance at the next dip (s)")
+    p.add_argument("--hard-max", type=float, default=12.0, help="always cut an utterance here (s)")
+    p.add_argument("--partial-every", type=float, default=1.0, help="seconds between partials, 0 to disable")
+    p.add_argument("--max-queue-secs", type=float, default=20.0)
+    p.add_argument("--input-file", help="read audio from a file instead of the microphone (evaluation)")
+    p.add_argument("--start", type=float, default=0.0, help="with --input-file: start offset (s)")
+    p.add_argument("--end", type=float, default=None, help="with --input-file: end offset (s)")
+    args = p.parse_args()
 
-                try:
-                    result = model.transcribe(audio, **transcribe_kwargs)
-                    text = confident_text(result)
-                except Exception as exc:
-                    emit({
-                        "type": "error",
-                        "message": f"Transcription failed: {exc}"
-                    })
-                    continue
+    emit({"type": "status", "message": "Loading speech model. The first run downloads it (about 1.5 GB).",
+          "ready": False, "listening": False})
+    try:
+        model, model_name, device, compute = load_model(args.model, args.device)
+        warm_up(model)
+    except Exception as exc:
+        emit({"type": "error", "message": f"Could not load the speech model: {exc}"})
+        sys.exit(1)
 
-                # Windows overlap, so skip an exact repeat of the last phrase.
-                if len(text) >= MIN_TEXT_CHARS and text != previous_text:
-                    emit({
-                        "type": "transcript",
-                        "text": text,
-                        "is_final": True
-                    })
-                    previous_text = text
+    segmenter = Segmenter(args.min_silence, args.soft_max, args.hard_max)
+    # Partials re-decode the whole utterance so far. Cheap on a GPU, too slow on a CPU.
+    partial_every = args.partial_every if device == "cuda" and not args.input_file else 0
 
-    worker = threading.Thread(target=transcriber_loop, daemon=True)
-    worker.start()
+    stop = threading.Event()
 
-    # ------------------------------------------------------------------
-    # Graceful shutdown channel.
-    #
-    # On Windows, killing the process is an abrupt TerminateProcess that can
-    # leave the audio device locked. Electron writes "stop" to stdin first and
-    # only kills the process if it does not exit in time.
-    # ------------------------------------------------------------------
-    def stdin_watcher():
+    def watch_stdin():
         try:
             for line in sys.stdin:
                 if line.strip().lower() in ("stop", "quit", "exit"):
                     break
         except Exception:
             pass
-        stop_event.set()
+        stop.set()
 
-    threading.Thread(target=stdin_watcher, daemon=True).start()
+    if not args.input_file:
+        threading.Thread(target=watch_stdin, daemon=True).start()
 
-    emit({
-        "type": "status",
-        "message": "Ready. Listening.",
-        "ready": True,
-        "listening": True
-    })
+    source = (file_frames(args.input_file, args.start, args.end) if args.input_file
+              else microphone_frames(args.device_index, stop, args.max_queue_secs))
+
+    emit({"type": "status", "message": f"Listening. {model_name} on {'GPU' if device == 'cuda' else 'CPU'}.",
+          "ready": True, "listening": True, "model": model_name, "device": device, "compute_type": compute})
+
+    last_partial = 0.0
+
+    def finish(utterance):
+        audio, start, end, speech_ended = utterance
+        t0 = time.monotonic()
+        text = transcribe(model, audio, args.beam_size)
+        decode_ms = round((time.monotonic() - t0) * 1000)
+        if text:
+            emit({"type": "transcript", "text": text, "is_final": True,
+                  "start": round(args.start + start, 2), "end": round(args.start + end, 2),
+                  "decode_ms": decode_ms,
+                  "latency_ms": round((time.monotonic() - speech_ended) * 1000)})
+        elif partial_every:
+            emit({"type": "partial", "text": ""})   # clear a partial that came to nothing
 
     try:
-        with sd.InputStream(
-            samplerate=sample_rate,
-            device=args.device_index,
-            channels=1,
-            dtype="float32",
-            callback=audio_callback,
-            blocksize=args.blocksize,
-        ):
-            # Exit the loop as soon as a stop is requested so the InputStream
-            # context manager closes the device properly on the way out.
-            while not stop_event.is_set():
-                time.sleep(0.1)
-
-    except KeyboardInterrupt:
-        pass
-
+        for frame, arrived in source:
+            if stop.is_set():
+                break
+            utterance = segmenter.push(frame, arrived)
+            if utterance:
+                finish(utterance)
+                continue
+            if partial_every and segmenter.speaking and arrived - last_partial >= partial_every:
+                audio = segmenter.current()
+                if audio is not None and len(audio) >= SAMPLE_RATE:
+                    last_partial = arrived
+                    emit({"type": "partial", "text": transcribe(model, audio, beam_size=1)})
+        if segmenter.speaking:           # flush the last utterance at the end of a file or session
+            finish(segmenter._finish())
     except Exception as exc:
-        emit({
-            "type": "error",
-            "message": f"Audio input failed: {exc}"
-        })
-
+        emit({"type": "error", "message": f"Audio input failed: {exc}"})
     finally:
-        stop_event.set()
-        # Give the transcriber a moment to notice and unwind before exiting.
-        worker.join(timeout=2.0)
-        if drop_stats["dropped"]:
-            emit({
-                "type": "warning",
-                "message": (
-                    f"Session dropped {drop_stats['dropped']} audio blocks due to "
-                    f"transcription lag. Consider a smaller model next service."
-                )
-            })
-        emit({
-            "type": "status",
-            "message": "Stopped listening.",
-            "ready": False,
-            "listening": False
-        })
+        stop.set()
+        emit({"type": "status", "message": "Stopped listening.", "ready": False, "listening": False})
 
 
 if __name__ == "__main__":
