@@ -15,7 +15,7 @@ const fs = require('fs')
 const log = require('./logger')
 
 const DEFAULTS = {
-  whisperModel: 'small',
+  whisperModel: 'auto',   // the worker picks the best model for the GPU, or the CPU
   deviceIndex:  null,
   llmEndpoint:  'http://localhost:1234/v1',
   confidenceFilter: 'all',   // 'all' | 'medium' | 'high'
@@ -25,7 +25,9 @@ const DEFAULTS = {
 // arbitrary state into the app.
 const ALLOWED = new Set(Object.keys(DEFAULTS))
 
-const VALID_MODELS = new Set(['tiny', 'base', 'small', 'medium', 'large-v3'])
+// Models the worker supports. An older saved value (tiny, small, large-v3...)
+// is not in this list, so it falls back to 'auto'.
+const VALID_MODELS = new Set(['auto', 'distil-large-v3.5', 'large-v3-turbo', 'small.en'])
 const VALID_FILTERS = new Set(['all', 'medium', 'high'])
 
 let _cache = null

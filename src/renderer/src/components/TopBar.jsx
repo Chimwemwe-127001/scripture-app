@@ -78,11 +78,13 @@ function ListenButton({ isListening, isStarting, onToggle }) {
  */
 export default function TopBar({
   isListening, isStarting, listeningSince, statusMsg,
-  whisperModel, llmStatus, vpStatus, bibleDbReady,
+  whisperModel, engine, llmStatus, vpStatus, bibleDbReady,
   onToggleListen, settingsOpen, onToggleSettings,
 }) {
+  // While listening, show what the worker really loaded and where it runs.
+  const running = engine ? `${engine.model} · ${engine.device === 'cuda' ? 'GPU' : 'CPU'}` : whisperModel
   const whisper = isListening
-    ? { state: 'ok', detail: whisperModel }
+    ? { state: 'ok', detail: running }
     : isStarting
       ? { state: 'warn', detail: 'loading' }
       : { state: 'off', detail: whisperModel }
