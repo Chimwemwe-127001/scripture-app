@@ -75,13 +75,13 @@ function LineText({ text, phrases, focusRef }) {
 }
 
 export default function TranscriptPanel({
-  segments, links = [], focusRef, isListening, isAnalyzing, onClear,
+  segments, partial = '', links = [], focusRef, isListening, isAnalyzing, onClear,
 }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
-  }, [segments])
+  }, [segments, partial])
 
   const wordCount = segments.reduce((n, s) => n + s.text.split(/\s+/).length, 0)
   const lineLinks = linkLines(segments, links)
@@ -97,7 +97,7 @@ export default function TranscriptPanel({
         {isAnalyzing && <span className="text-fg-2">LM Studio is reading the last passage</span>}
       </>}
     >
-      {segments.length === 0 ? (
+      {segments.length === 0 && !partial ? (
         <div className="px-8 py-16 flex flex-col items-center text-center text-fg-3 gap-2">
           {isListening
             ? <p>Listening. Waiting for speech.</p>
@@ -131,9 +131,14 @@ export default function TranscriptPanel({
             )
           })}
           {isListening && (
-            <li className="grid grid-cols-[44px_1fr] pr-4" aria-hidden="true">
+            // The sentence still being spoken, greyed until the final text
+            // replaces it. Only final text is searched for verses.
+            <li className="grid grid-cols-[44px_1fr] pr-4" aria-live="off">
               <span />
-              <span className="pl-3.5 py-1"><span className="caret inline-block w-[7px] h-[15px] bg-fg-3 align-middle" /></span>
+              <p className="py-1 pl-3 border-l-2 border-transparent leading-relaxed text-[14px] text-fg-3 italic">
+                {partial && <>{partial} </>}
+                <span className="caret inline-block w-[7px] h-[15px] bg-fg-3 align-middle" aria-hidden="true" />
+              </p>
             </li>
           )}
         </ol>

@@ -312,7 +312,13 @@ chunker.on('chunk', async ({ text, chunkId, startAt, fireAt }) => {
 
 function handleWhisperMessage(msg) {
   switch (msg.type) {
+    case 'partial':
+      // Words of the sentence still being spoken. Shown, never detected on,
+      // so a half-heard "John 3" cannot become a card.
+      mainWindow?.webContents.send('transcript-partial', msg)
+      break
     case 'transcript': {
+      log.info('whisper', 'Line', { latencyMs: msg.latency_ms, decodeMs: msg.decode_ms })
       mainWindow?.webContents.send('transcript-update', msg)
       chunker.addText(msg.text)
       processInstantRefs(msg.text)
@@ -342,7 +348,7 @@ ipcMain.handle('get-audio-devices', async () => {
   return runPythonJson('list_devices.py')
 })
 
-ipcMain.handle('start-listening', async (_e, { model = 'small', deviceIndex = null } = {}) => {
+ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex = null } = {}) => {
   killWhisper()
   sentRefs = new Map()
   _transcriptWords = []
