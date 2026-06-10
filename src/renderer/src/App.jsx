@@ -40,7 +40,11 @@ export default function App() {
   const [vpStatus, setVpStatus]         = useState(false)
 
   // Selected whisper model + audio device (chosen in the settings panel)
-  const [whisperModel, setWhisperModel]   = useState('small')
+  const [whisperModel, setWhisperModel]   = useState('auto')
+  // What the worker actually loaded, e.g. { model: 'distil-large-v3.5', device: 'cuda' }
+  const [engine, setEngine]               = useState(null)
+  // Words of the sentence still being spoken, shown greyed until it is final.
+  const [partial, setPartial]             = useState('')
   const [deviceIndex, setDeviceIndex]     = useState(null)
   const [devices, setDevices]             = useState([])
 
@@ -194,13 +198,17 @@ export default function App() {
 
     api.onTranscript((msg) => {
       setSegments(prev => [...prev, makeSegment(msg.text)])
+      setPartial('')
     })
+    api.onTranscriptPartial?.((msg) => setPartial(msg.text || ''))
     api.onListeningStatus((msg) => {
       if (typeof msg.listening === 'boolean') {
         setIsListening(msg.listening)
         // Whisper has reported its state, so the start-up window is over.
         setIsStarting(false)
+        if (!msg.listening) setPartial('')
       }
+      if (msg.model) setEngine({ model: msg.model, device: msg.device })
       if (msg.message) setStatusMsg(msg.message)
     })
     api.onListeningError((msg) => {
@@ -232,7 +240,7 @@ export default function App() {
     })
 
     return () => {
-      ['transcript-update', 'listening-status', 'listening-error', 'scripture-suggestion',
+      ['transcript-update', 'transcript-partial', 'listening-status', 'listening-error', 'scripture-suggestion',
        'llm-error', 'scripture-analyzing', 'scripture-analyzing-done'].forEach(
         ch => api.removeAllListeners(ch)
       )
@@ -353,6 +361,7 @@ export default function App() {
         listeningSince={listeningSince}
         statusMsg={statusMsg}
         whisperModel={whisperModel}
+        engine={engine}
         llmStatus={llmStatus}
         vpStatus={vpStatus}
         bibleDbReady={bibleDbReady}
@@ -378,6 +387,7 @@ export default function App() {
       <div className="flex flex-1 min-h-0 gap-px bg-line">
         <TranscriptPanel
           segments={segments}
+          partial={partial}
           isListening={isListening}
           isAnalyzing={analyzingChunks.length > 0}
           links={links}

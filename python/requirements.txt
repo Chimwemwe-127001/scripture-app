@@ -1,7 +1,13 @@
-# Speech-to-text
-openai-whisper
+# Speech-to-text: faster-whisper runs Whisper models with CTranslate2 and
+# bundles Silero voice detection. No PyTorch needed.
+faster-whisper>=1.2
 sounddevice
 numpy
+
+# NVIDIA CUDA libraries for the GPU. Without an NVIDIA GPU these are unused
+# and the worker falls back to the CPU on its own.
+nvidia-cublas-cu12 ; sys_platform == 'win32' or sys_platform == 'linux'
+nvidia-cudnn-cu12 ; sys_platform == 'win32' or sys_platform == 'linux'
 
 # VideoPsalm bridge (Windows only): win32gui, psutil and pywinauto.
 pywin32 ; sys_platform == 'win32'

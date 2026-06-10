@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Incoming events from main process
   onTranscript:          (cb) => ipcRenderer.on('transcript-update',    (_e, d) => cb(d)),
+  onTranscriptPartial:   (cb) => ipcRenderer.on('transcript-partial',   (_e, d) => cb(d)),
   onListeningStatus:     (cb) => ipcRenderer.on('listening-status',     (_e, d) => cb(d)),
   onListeningError:      (cb) => ipcRenderer.on('listening-error',      (_e, d) => cb(d)),
   onScriptureSuggestion: (cb) => ipcRenderer.on('scripture-suggestion', (_e, d) => cb(d)),

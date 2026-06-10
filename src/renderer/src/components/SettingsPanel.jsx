@@ -2,11 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon'
 
 const MODELS = [
-  { value: 'tiny',     label: 'tiny',     note: '75 MB, fastest, needs clear audio' },
-  { value: 'base',     label: 'base',     note: '140 MB, for low-spec PCs' },
-  { value: 'small',    label: 'small',    note: '460 MB, recommended on CPU' },
-  { value: 'medium',   label: 'medium',   note: '1.5 GB, needs a GPU' },
-  { value: 'large-v3', label: 'large-v3', note: '3 GB, GPU only' },
+  { value: 'auto',              label: 'Automatic (recommended)', note: 'The best model for this PC: distil-large-v3.5 on an NVIDIA GPU, small.en on the CPU.' },
+  { value: 'distil-large-v3.5', label: 'distil-large-v3.5',       note: 'English. About 1.1 GB of GPU memory. Fewest invented words.' },
+  { value: 'large-v3-turbo',    label: 'large-v3-turbo',          note: 'Multilingual. About 1.1 GB of GPU memory.' },
+  { value: 'small.en',          label: 'small.en',                note: 'English. Runs on the CPU when there is no GPU, slower.' },
 ]
 
 function Section({ title, children }) {
