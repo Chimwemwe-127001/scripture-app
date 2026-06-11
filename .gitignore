@@ -29,3 +29,6 @@ Thumbs.db
 .vscode/
 .idea/
 .claude/
+
+# Real service recordings and their transcripts, used only locally for evaluation
+eval-audio/
