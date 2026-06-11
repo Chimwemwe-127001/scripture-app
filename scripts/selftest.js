@@ -85,6 +85,10 @@ group('Extraction: how Whisper actually writes references')
 check('full stop = medium',  confs('turn with me to John 3.16, For God'), ['John 3:16[medium]'])
 check('hyphen = medium',     confs('And Romans 8-28 tells us'), ['Romans 8:28[medium]'])
 check('sentence end is not a verse', confs('turn to Romans 8. Then we pray'), ['Romans 8[low]'])
+// From a real sermon recording: a comma before "verse" used to drop the verse
+// and offer chapter:1 instead.
+check('comma before verse',  confs('1 Corinthians 15, verse 58. Therefore'), ['1 Corinthians 15:58[high]'])
+check('chapter, comma, verse', confs('first John chapter 4, verse 8 and verse 19'), ['1 John 4:8[high]'])
 
 // ---------------------------------------------------------------------------
 group('LLM response parsing')
