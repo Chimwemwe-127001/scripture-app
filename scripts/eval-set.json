@@ -59,6 +59,10 @@
     { "category": "whisper punctuation", "text": "Isaiah 40.31 they that wait upon the Lord shall renew their strength", "refs": ["Isaiah 40:31"] },
     { "category": "whisper punctuation", "text": "Herefor good, to them that love God. Let us also read Psalm 23 verse 1.", "refs": ["Psalms 23:1"] },
 
+    { "category": "comma before verse", "text": "1 Corinthians 15, verse 58. Therefore, my beloved brethren, be steadfast, immovable", "refs": ["1 Corinthians 15:58"] },
+    { "category": "comma before verse", "text": "However, I will stick to 2 Corinthians 13, verse 14.", "refs": ["2 Corinthians 13:14"] },
+    { "category": "comma before verse", "text": "Very quickly, very, very quickly. Exodus 33, verse 13.", "refs": ["Exodus 33:13"] },
+
     { "category": "hard",         "text": "John three sixteen", "refs": ["John 3:16"] },
     { "category": "hard",         "text": "Romans chapter eight verse one there is therefore now no condemnation", "refs": ["Romans 8:1"] },
     { "category": "hard",         "text": "Jude verse 24 now unto him that is able", "refs": ["Jude 1:24"] },
