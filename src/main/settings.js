@@ -17,6 +17,7 @@ const log = require('./logger')
 const DEFAULTS = {
   whisperModel: 'auto',   // the worker picks the best model for the GPU, or the CPU
   deviceIndex:  null,
+  deviceName:   null,   // the device the index pointed to, since Windows renumbers devices
   llmEndpoint:  'http://localhost:1234/v1',
   confidenceFilter: 'all',   // 'all' | 'medium' | 'high'
 }
@@ -50,6 +51,9 @@ function validate(input) {
         break
       case 'deviceIndex':
         if (value === null || (Number.isInteger(value) && value >= 0)) out.deviceIndex = value
+        break
+      case 'deviceName':
+        if (value === null || (typeof value === 'string' && value.length <= 200)) out.deviceName = value
         break
       case 'llmEndpoint':
         if (typeof value === 'string' && /^https?:\/\//i.test(value)) out.llmEndpoint = value
