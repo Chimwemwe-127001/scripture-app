@@ -152,6 +152,8 @@ async function lookupVerse(ref) {
       confidence:  ref.confidence  || 'medium',
       trigger:     ref.trigger     || 'allusion',
       heard:       ref.heard       || null,   // transcript text that matched, regex path only
+      via:         ref.via         || null,   // passage a bare "verse 16" was read against
+      chapterOnly: !!ref.isChapterOnly,       // only a chapter was named; shown as verse 1
       translation: 'KJV',
     }
   } catch (err) {
