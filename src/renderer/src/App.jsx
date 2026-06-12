@@ -78,15 +78,28 @@ export default function App() {
     api.getSettings?.().then(saved => {
       if (!saved) return
       if (saved.whisperModel) setWhisperModel(saved.whisperModel)
-      if (saved.deviceIndex !== undefined) setDeviceIndex(saved.deviceIndex)
       if (saved.llmEndpoint) setLlmEndpoint(saved.llmEndpoint)
     })
 
+    // The input is saved by name as well as index, because Windows renumbers
+    // devices when hardware is plugged in. Look the name up in today's list so
+    // a renumbered device is followed, and a missing one is never replaced by
+    // whatever now has its old number.
     Promise.all([api.getAudioDevices(), api.getSettings?.()]).then(([list, saved]) => {
       if (!Array.isArray(list)) return
       setDevices(list)
-      const savedIndex = saved?.deviceIndex
-      if (savedIndex != null && !list.some(d => d.index === savedIndex)) setDeviceIndex(null)
+      if (saved?.deviceName) {
+        const match = list.find(d => d.name === saved.deviceName)
+        if (match) {
+          setDeviceIndex(match.index)
+          if (match.index !== saved.deviceIndex) api.saveSettings?.({ deviceIndex: match.index })
+        } else {
+          setDeviceIndex(null)
+          setErrorMsg(`The saved input "${saved.deviceName}" was not found. Using the system default.`)
+        }
+      } else if (saved?.deviceIndex != null && list.some(d => d.index === saved.deviceIndex)) {
+        setDeviceIndex(saved.deviceIndex)   // settings from before names were saved
+      }
     })
 
     api.checkBibleDb().then(r => setBibleDbReady(r.ready))
@@ -223,16 +236,19 @@ export default function App() {
     })
     api.onScriptureSuggestion((card) => {
       const addedAt = Date.now()
-      setLinks(prev => [...prev, {
+      // A specific verse replaces the "verse 1" guess for its chapter (below),
+      // so the guess's transcript link goes too.
+      const replacesGuess = (x) => !card.chapterOnly && x.chapterOnly &&
+        x.book === card.book && x.chapter === card.chapter
+      setLinks(prev => [...prev.filter(l => !replacesGuess(l)), {
         id: card.id, reference: card.reference, heard: card.heard,
         startAt: card.startAt, fireAt: card.fireAt, addedAt,
+        book: card.book, chapter: card.chapter, chapterOnly: card.chapterOnly,
       }])
       setSuggestions(prev => {
         // A specific verse replaces the "verse 1" guess shown when only its
         // chapter had been named, e.g. Hebrews 6:10 replaces Hebrews 6:1.
-        const rest = card.chapterOnly ? prev : prev.filter(s =>
-          !(s.chapterOnly && s.book === card.book && s.chapter === card.chapter))
-        return [{ ...card, addedAt }, ...rest].slice(0, SUGGESTION_MAX)
+        return [{ ...card, addedAt }, ...prev.filter(s => !replacesGuess(s))].slice(0, SUGGESTION_MAX)
       })
     })
     api.onLlmError?.((data) => {
@@ -323,7 +339,8 @@ export default function App() {
 
   function handleDeviceChange(index) {
     setDeviceIndex(index)
-    api?.saveSettings?.({ deviceIndex: index })
+    const name = devices.find(d => d.index === index)?.name ?? null
+    api?.saveSettings?.({ deviceIndex: index, deviceName: name })
   }
 
   // ------------------------------------------------------------------
