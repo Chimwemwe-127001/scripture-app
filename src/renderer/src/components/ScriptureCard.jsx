@@ -159,7 +159,9 @@ export default function ScriptureCard({ scripture, hotkey, primary, onSent, onSe
             {scripture.manual
               ? 'Typed by operator'
               : <>
-                  {SOURCE[scripture.trigger] || scripture.trigger}
+                  {scripture.trigger === 'context'
+                    ? `Follows ${scripture.via}`
+                    : SOURCE[scripture.trigger] || scripture.trigger}
                   {heardDiffers && <> · heard <span className="text-fg-2 italic">"{scripture.heard}"</span></>}
                 </>}
           </p>

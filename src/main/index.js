@@ -5,6 +5,7 @@ const chunker        = require('./chunker')
 const llmClient      = require('./llmClient')
 const bibleDb        = require('./bibleDb')
 const bibleExtractor = require('./bibleExtractor')
+const { ReadingContext } = require('./readingContext')
 const settings       = require('./settings')
 const log            = require('./logger')
 
@@ -40,6 +41,9 @@ function pruneSentRefs() {
 // sermon so it can resolve phrases like "as Paul says here".
 const CONTEXT_MAX_WORDS = 160
 let _transcriptWords = []
+
+// The passage the preacher is in, so "verse 16" on its own can be placed.
+const readingContext = new ReadingContext()
 
 // ---------------------------------------------------------------------------
 // Python helpers
@@ -240,7 +244,8 @@ function callVpBridge(params, timeoutMs = VP_TIMEOUT_MS) {
 // ---------------------------------------------------------------------------
 
 async function processInstantRefs(text) {
-  const refs = bibleExtractor.extract(text)
+  // Full citations plus verses that follow the passage in context, in spoken order.
+  const refs = readingContext.process(text)
   for (const ref of refs) {
     if (!ref.reference || !shouldSuggest(ref.reference)) continue
     const card = await bibleDb.lookupVerse(ref)
@@ -352,6 +357,7 @@ ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex = nul
   killWhisper()
   sentRefs = new Map()
   _transcriptWords = []
+  readingContext.reset()
   chunker.start()
 
   // Remember the choice so the next service starts configured.
@@ -456,6 +462,10 @@ ipcMain.handle('lookup-reference', async (_e, query) => {
   }
 
   log.info('manual', 'Manual lookup', { query: text, found: cards.length })
+
+  // A typed reference also sets the passage, so a following "verse 5" fits it.
+  const last = cards[cards.length - 1]
+  readingContext.remember(last.book, last.chapter)
 
   // A manual entry is a deliberate operator decision: always high confidence,
   // and it skips the dedupe window so a repeat lookup always works.

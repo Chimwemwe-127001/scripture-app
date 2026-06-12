@@ -29,8 +29,9 @@ const PATTERN = new RegExp(
   `\\s+(?:chapter\\s+)?(\\d{1,3})\\b` +
   // Optionally a verse, introduced by ':' / 'verse' / 'v' / ',' / whitespace...
   `(?:` +
-    // A comma may come before "verse", as Whisper writes "15, verse 58".
-    `(?:\\s*(:|,?\\s*verses?|,?\\s*vv?\\.?|,)\\s*|\\s+` +
+    // A comma may come before "verse", as Whisper writes "15, verse 58", and
+    // preachers often say "Mark 12 from verse 28".
+    `(?:\\s*(:|,?\\s*(?:from\\s+)?verses?|,?\\s*vv?\\.?|,)\\s*|\\s+` +
     // ...or by '.' or '-' with no spaces, which is how Whisper often writes a
     // spoken "three sixteen" ("John 3.16", "Romans 8-28"). Requiring no spaces
     // keeps a sentence that ends "Romans 8. Then..." from becoming 8:1.
@@ -88,7 +89,7 @@ function extract(text) {
       if (bookNames.isAmbiguous(canonical)) continue
       confidence = 'low'
       isChapterOnly = true
-    } else if (STRONG_SEPARATOR.test(separator.replace(/^[,\s]+/, ''))) {
+    } else if (STRONG_SEPARATOR.test(separator.replace(/^[,\s]+/, '').replace(/^from\s+/i, ''))) {
       // "John 3:16" or "John 3 verse 16": unambiguous.
       confidence = 'high'
     } else {
@@ -117,6 +118,7 @@ function extract(text) {
       confidence,
       trigger:     'explicit',
       heard:       match[0].trim(),
+      index:       match.index,   // where it was said in the line, for readingContext
       isChapterOnly,
     })
   }

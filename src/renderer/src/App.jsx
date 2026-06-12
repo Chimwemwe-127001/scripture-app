@@ -227,7 +227,13 @@ export default function App() {
         id: card.id, reference: card.reference, heard: card.heard,
         startAt: card.startAt, fireAt: card.fireAt, addedAt,
       }])
-      setSuggestions(prev => [{ ...card, addedAt }, ...prev].slice(0, SUGGESTION_MAX))
+      setSuggestions(prev => {
+        // A specific verse replaces the "verse 1" guess shown when only its
+        // chapter had been named, e.g. Hebrews 6:10 replaces Hebrews 6:1.
+        const rest = card.chapterOnly ? prev : prev.filter(s =>
+          !(s.chapterOnly && s.book === card.book && s.chapter === card.chapter))
+        return [{ ...card, addedAt }, ...rest].slice(0, SUGGESTION_MAX)
+      })
     })
     api.onLlmError?.((data) => {
       setErrorMsg(`LM Studio error: ${data.message || 'Channel Error. Try reloading the model in LM Studio.'}`)

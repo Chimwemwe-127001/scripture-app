@@ -91,6 +91,38 @@ check('comma before verse',  confs('1 Corinthians 15, verse 58. Therefore'), ['1
 check('chapter, comma, verse', confs('first John chapter 4, verse 8 and verse 19'), ['1 John 4:8[high]'])
 
 // ---------------------------------------------------------------------------
+group('Reading context: a bare "verse 16" follows the passage being read')
+// ---------------------------------------------------------------------------
+// Lines from a real sermon, fed one after another as the app does.
+const { ReadingContext } = require('../src/main/readingContext')
+const T0 = Date.UTC(2026, 5, 14, 9)
+const say = (ctx, line, mins = 0) => ctx.process(line, T0 + mins * 60000).map(r => r.reference)
+
+{
+  const ctx = new ReadingContext()
+  check('citation sets the passage', say(ctx, 'described in John 14 verse 17 when Jesus was talking'), ['John 14:17'])
+  check('bare verse follows it',     say(ctx, "So let's start from verse 16."), ['John 14:16'])
+  check('range follows it',          say(ctx, 'read verses 16 to 18 with me'), ['John 14:16-18'])
+  check('chapter only keeps book',   say(ctx, 'now go to chapter 15, verse 12'), ['John 15:12'])
+}
+{
+  const ctx = new ReadingContext()
+  check('two verses in one line',    say(ctx, 'first John chapter 4, verse 8 and verse 19'), ['1 John 4:8', '1 John 4:19'])
+  check('"verse 13 and 17"',         say(ctx, 'Take us to Exodus 33. But verse 13 and 17, I want you to see.'),
+    ['Exodus 33', 'Exodus 33:13', 'Exodus 33:17'])
+}
+{
+  const ctx = new ReadingContext()
+  check('no passage, no guess',      say(ctx, 'Okay, verse 3.'), [])
+  say(ctx, 'Look at first John chapter 5.')
+  check('still in the passage',      say(ctx, 'Anyway. Verse 2.', 9), ['1 John 5:2'])
+  check('forgotten after 10 minutes', say(ctx, 'and the second verse of the song, verse 2', 20), [])
+}
+check('context card is medium',
+  new ReadingContext().process('Mark 12 from verse 28 to 31. Verse 30.').map(r => `${r.reference}[${r.confidence}]`),
+  ['Mark 12:28-31[high]', 'Mark 12:30[medium]'])
+
+// ---------------------------------------------------------------------------
 group('LLM response parsing')
 // ---------------------------------------------------------------------------
 const parse = (s) => llmClient._parseResponse(s).map(r => r.reference)
