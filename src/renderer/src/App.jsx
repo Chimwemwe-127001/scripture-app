@@ -89,10 +89,15 @@ export default function App() {
       if (!Array.isArray(list)) return
       setDevices(list)
       if (saved?.deviceName) {
+        // Exact name first. Older versions saved MME names cut at 31
+        // characters, which are a prefix of today's full names.
         const match = list.find(d => d.name === saved.deviceName)
+          || list.find(d => d.name.startsWith(saved.deviceName))
         if (match) {
           setDeviceIndex(match.index)
-          if (match.index !== saved.deviceIndex) api.saveSettings?.({ deviceIndex: match.index })
+          if (match.index !== saved.deviceIndex || match.name !== saved.deviceName) {
+            api.saveSettings?.({ deviceIndex: match.index, deviceName: match.name })
+          }
         } else {
           setDeviceIndex(null)
           setErrorMsg(`The saved input "${saved.deviceName}" was not found. Using the system default.`)
