@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electronAPI', {
   // Audio device listing
   getAudioDevices: () => ipcRenderer.invoke('get-audio-devices'),
+  testInput:       (deviceIndex) => ipcRenderer.invoke('test-input', deviceIndex),
+  onInputLevel:    (cb) => ipcRenderer.on('input-level', (_e, d) => cb(d)),
 
   // Whisper lifecycle
   startListening: (opts) => ipcRenderer.invoke('start-listening', opts),

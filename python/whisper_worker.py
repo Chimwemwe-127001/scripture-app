@@ -30,6 +30,8 @@ import time
 
 import numpy as np
 
+from audio_input import default_device, stream_settings
+
 SAMPLE_RATE = 16000
 FRAME = 512                 # Silero VAD works on 32 ms frames at 16 kHz
 CONTEXT = 64                # samples of the previous frame the model also sees
@@ -274,8 +276,10 @@ def microphone_frames(device_index, stop, max_queue_secs):
                 emit({"type": "warning",
                       "message": f"Transcription is falling behind. Dropped {dropped['count']} audio blocks."})
 
-    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32",
-                        blocksize=FRAME, device=device_index, callback=callback):
+    # Same devices as the list in Settings (Windows WASAPI), converted to 16 kHz.
+    device = device_index if device_index is not None else default_device(sd)
+    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32", blocksize=FRAME,
+                        device=device, extra_settings=stream_settings(sd, device), callback=callback):
         while not stop.is_set():
             try:
                 yield q.get(timeout=0.25)
