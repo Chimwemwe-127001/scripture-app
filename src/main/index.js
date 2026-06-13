@@ -353,6 +353,33 @@ ipcMain.handle('get-audio-devices', async () => {
   return runPythonJson('list_devices.py')
 })
 
+/**
+ * Test input: run the level meter on one device for a few seconds, streaming
+ * its level to the settings panel, so the operator can see a microphone is
+ * really getting sound before the service starts.
+ */
+ipcMain.handle('test-input', async (_e, deviceIndex = null) => {
+  const args = [join(pythonDir(), 'level_meter.py'), '--seconds', '5']
+  if (deviceIndex !== null && deviceIndex !== undefined) args.push('--device-index', String(deviceIndex))
+
+  return new Promise((resolve) => {
+    const proc = spawn(pythonCmd(), args)
+    let result = { ok: false, error: 'The level meter did not report back' }
+    proc.stdout.on('data', lineReader((line) => {
+      let msg
+      try { msg = JSON.parse(line) } catch { return }
+      if (msg.level !== undefined) mainWindow?.webContents.send('input-level', msg)
+      if (msg.done) result = { ok: true, peakDb: msg.peak_db }
+      if (msg.error) result = { ok: false, error: msg.error }
+    }))
+    proc.on('error', (err) => resolve({ ok: false, error: `Python not found: ${err.message}` }))
+    proc.on('close', () => {
+      log.info('audio', 'Input test', { deviceIndex, ...result })
+      resolve(result)
+    })
+  })
+})
+
 ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex = null } = {}) => {
   killWhisper()
   sentRefs = new Map()
