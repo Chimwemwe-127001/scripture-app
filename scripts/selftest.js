@@ -17,6 +17,7 @@ const bookNames = require('../src/main/bookNames')
 const extractor = require('../src/main/bibleExtractor')
 const bibleDb   = require('../src/main/bibleDb')
 const llmClient = require('../src/main/llmClient')
+const { VerseSearch, isStrong, stem } = require('../src/main/verseSearch')
 
 let passed = 0
 let failed = 0
@@ -123,6 +124,14 @@ check('context card is medium',
   ['Mark 12:28-31[high]', 'Mark 12:30[medium]'])
 
 // ---------------------------------------------------------------------------
+group('Verse search: spoken English meets KJV English')
+// ---------------------------------------------------------------------------
+check('knoweth = know',   stem('knoweth'), stem('know'))
+check('loveth = love',    stem('loveth'), stem('love'))
+check('labour = labor',   stem('labour'), stem('labor'))
+check('setteth = set',    stem('setteth'), stem('set'))
+
+// ---------------------------------------------------------------------------
 group('LLM response parsing')
 // ---------------------------------------------------------------------------
 const parse = (s) => llmClient._parseResponse(s).map(r => r.reference)
@@ -177,6 +186,17 @@ check('truncated salvages', parse(`[${OBJ_A},${OBJ_B},{"reference":"Psalm 23:1",
       if (card) found.push(card.reference)
     }
     check('both references resolve', found, ['1 Corinthians 13:4', '2 Timothy 3:16'])
+
+    group('Verse search: quotes found without a reference')
+    const search = new VerseSearch(await bibleDb.allVerses())
+    const quoted = (line) => { const c = search.search(line); return isStrong(c) ? c[0].reference : null }
+    // Real lines from a sermon recording.
+    check('quote inside a longer line',
+      quoted('Here we need to move very quickly. And the Lord said, my presence shall go with you.'), 'Exodus 33:14')
+    check('old English forms',  quoted('He who does not love does not know God. For God is love.'), '1 John 4:8')
+    check('British spelling',   quoted('knowing that your labor is not in vain in the Lord'), '1 Corinthians 15:58')
+    check('ordinary talk',      quoted('I want you to look at your neighbor and say, neighbor.'), null)
+    check('church talk',        quoted('God is good all the time, and all the time God is good.'), null)
   }
 
   // -------------------------------------------------------------------------
