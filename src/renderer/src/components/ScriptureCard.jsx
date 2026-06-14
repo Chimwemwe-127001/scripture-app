@@ -11,6 +11,7 @@ const SOURCE = {
   explicit:   'Cited',
   paraphrase: 'Paraphrase',
   allusion:   'Allusion',
+  quote:      'Quoted',
 }
 
 /** Confidence as a label plus a 3-step bar, so it does not rely on colour. */

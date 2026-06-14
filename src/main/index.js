@@ -6,6 +6,7 @@ const llmClient      = require('./llmClient')
 const bibleDb        = require('./bibleDb')
 const bibleExtractor = require('./bibleExtractor')
 const { ReadingContext } = require('./readingContext')
+const { VerseSearch, isStrong } = require('./verseSearch')
 const settings       = require('./settings')
 const log            = require('./logger')
 
@@ -44,6 +45,11 @@ let _transcriptWords = []
 
 // The passage the preacher is in, so "verse 16" on its own can be placed.
 const readingContext = new ReadingContext()
+
+// Keyword index of every KJV verse, for verses quoted without being named.
+// Built in the background once the window is up (about a second).
+let verseSearch = null
+let _previousLine = ''   // quotes often run across two transcript lines
 
 // ---------------------------------------------------------------------------
 // Python helpers
@@ -245,22 +251,42 @@ function callVpBridge(params, timeoutMs = VP_TIMEOUT_MS) {
 
 async function processInstantRefs(text) {
   // Full citations plus verses that follow the passage in context, in spoken order.
-  const refs = readingContext.process(text)
-  for (const ref of refs) {
-    if (!ref.reference || !shouldSuggest(ref.reference)) continue
-    const card = await bibleDb.lookupVerse(ref)
-    if (!card) {
-      // Not found. Release the dedupe slot so a later, cleaner mention of the
-      // same reference still gets a chance.
-      sentRefs.delete(ref.reference)
-      continue
+  for (const ref of readingContext.process(text)) await suggestNow(ref, 'Instant regex hit')
+
+  // Verses quoted or closely paraphrased without being named: search the KJV
+  // text for this line and the one before it.
+  if (verseSearch) {
+    const candidates = verseSearch.search(`${_previousLine} ${text}`)
+    if (isStrong(candidates)) {
+      const best = candidates[0]
+      await suggestNow({
+        reference:   best.reference,
+        book:        best.book,
+        chapter:     best.chapter,
+        verse_start: best.verse,
+        confidence:  best.pairWeight >= 25 ? 'high' : 'medium',
+        trigger:     'quote',
+      }, 'Quote found by search')
     }
-    const now = Date.now()
-    log.info('pipeline', 'Instant regex hit', { reference: card.reference })
-    mainWindow?.webContents.send('scripture-suggestion', {
-      ...card, chunkId: null, startAt: now - 300, fireAt: now + 300,
-    })
   }
+  _previousLine = text
+}
+
+/** Look a reference up and send it as a card, unless it was suggested recently. */
+async function suggestNow(ref, why) {
+  if (!ref.reference || !shouldSuggest(ref.reference)) return
+  const card = await bibleDb.lookupVerse(ref)
+  if (!card) {
+    // Not found. Release the dedupe slot so a later, cleaner mention of the
+    // same reference still gets a chance.
+    sentRefs.delete(ref.reference)
+    return
+  }
+  const now = Date.now()
+  log.info('pipeline', why, { reference: card.reference })
+  mainWindow?.webContents.send('scripture-suggestion', {
+    ...card, chunkId: null, startAt: now - 300, fireAt: now + 300,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +411,7 @@ ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex = nul
   sentRefs = new Map()
   _transcriptWords = []
   readingContext.reset()
+  _previousLine = ''
   chunker.start()
 
   // Remember the choice so the next service starts configured.
@@ -580,6 +607,17 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+
+  // Build the verse index after the window is up, so start-up stays quick.
+  setTimeout(async () => {
+    const t0 = Date.now()
+    const verses = await bibleDb.allVerses()
+    if (verses.length) {
+      verseSearch = new VerseSearch(verses)
+      log.info('search', 'Verse index ready', { verses: verses.length, ms: Date.now() - t0 })
+    }
+  }, 500)
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
