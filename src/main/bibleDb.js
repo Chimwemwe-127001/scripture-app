@@ -162,4 +162,21 @@ async function lookupVerse(ref) {
   }
 }
 
-module.exports = { lookupVerse, isDbReady }
+/**
+ * Every verse in canonical order, for building search indexes.
+ * @returns {Promise<Array<{book, chapter, verse, text}>>} empty if no database
+ */
+async function allVerses() {
+  const db = await initDb()
+  if (!db) return []
+  const out = []
+  const stmt = db.prepare('SELECT book_name, chapter, verse, text FROM verses ORDER BY book_id, chapter, verse')
+  while (stmt.step()) {
+    const [book, chapter, verse, text] = stmt.get()
+    out.push({ book, chapter, verse, text })
+  }
+  stmt.free()
+  return out
+}
+
+module.exports = { lookupVerse, isDbReady, allVerses }
