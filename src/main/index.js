@@ -6,7 +6,7 @@ const llmClient      = require('./llmClient')
 const bibleDb        = require('./bibleDb')
 const bibleExtractor = require('./bibleExtractor')
 const { ReadingContext } = require('./readingContext')
-const { VerseSearch, isStrong } = require('./verseSearch')
+const { VerseSearch, isStrong, forJudge } = require('./verseSearch')
 const settings       = require('./settings')
 const log            = require('./logger')
 
@@ -50,6 +50,12 @@ const readingContext = new ReadingContext()
 // Built in the background once the window is up (about a second).
 let verseSearch = null
 let _previousLine = ''   // quotes often run across two transcript lines
+
+// Lines search could not settle on its own wait here for the LLM judge. One
+// question at a time, and only the newest waiting line is kept: a card for
+// what is being said now matters more than one for ten seconds ago.
+let _judgeBusy = false
+let _judgeNext = null
 
 // ---------------------------------------------------------------------------
 // Python helpers
@@ -256,24 +262,54 @@ async function processInstantRefs(text) {
   // Verses quoted or closely paraphrased without being named: search the KJV
   // text for this line and the one before it.
   if (verseSearch) {
-    const candidates = verseSearch.search(`${_previousLine} ${text}`)
+    const line = `${_previousLine} ${text}`.trim()
+    const candidates = verseSearch.search(line)
     if (isStrong(candidates)) {
       const best = candidates[0]
       await suggestNow({
-        reference:   best.reference,
-        book:        best.book,
-        chapter:     best.chapter,
-        verse_start: best.verse,
-        confidence:  best.pairWeight >= 25 ? 'high' : 'medium',
-        trigger:     'quote',
+        ...asRef(best),
+        confidence: best.pairWeight >= 25 ? 'high' : 'medium',
+        trigger:    'quote',
       }, 'Quote found by search')
+    } else {
+      // Close but unsure: let the LLM choose among the verses that share a
+      // phrase with the line, or choose none.
+      const options = forJudge(candidates)
+      if (options.length) judgeLater(line, options)
     }
   }
   _previousLine = text
 }
 
+function judgeLater(line, options) {
+  _judgeNext = { line, options, heardAt: Date.now() }
+  if (!_judgeBusy) runJudge()
+}
+
+async function runJudge() {
+  _judgeBusy = true
+  try {
+    while (_judgeNext) {
+      const { line, options, heardAt } = _judgeNext
+      _judgeNext = null
+      const pick = await llmClient.pickVerse(line, options)
+      if (pick) {
+        await suggestNow({ ...asRef(pick), confidence: 'medium', trigger: 'paraphrase' },
+          'Paraphrase confirmed by LLM', { judgeMs: Date.now() - heardAt })
+      }
+    }
+  } finally {
+    _judgeBusy = false
+  }
+}
+
+/** A verseSearch candidate as a reference for bibleDb.lookupVerse. */
+function asRef(c) {
+  return { reference: c.reference, book: c.book, chapter: c.chapter, verse_start: c.verse }
+}
+
 /** Look a reference up and send it as a card, unless it was suggested recently. */
-async function suggestNow(ref, why) {
+async function suggestNow(ref, why, details = {}) {
   if (!ref.reference || !shouldSuggest(ref.reference)) return
   const card = await bibleDb.lookupVerse(ref)
   if (!card) {
@@ -283,7 +319,7 @@ async function suggestNow(ref, why) {
     return
   }
   const now = Date.now()
-  log.info('pipeline', why, { reference: card.reference })
+  log.info('pipeline', why, { reference: card.reference, ...details })
   mainWindow?.webContents.send('scripture-suggestion', {
     ...card, chunkId: null, startAt: now - 300, fireAt: now + 300,
   })
@@ -302,7 +338,9 @@ chunker.on('chunk', async ({ text, chunkId, startAt, fireAt }) => {
   // 1. Regex: always runs and catches explicit references.
   const regexRefs = bibleExtractor.extract(text)
 
-  // 2. LLM: catches paraphrases and allusions when LM Studio is available.
+  // 2. LLM: catches allusions that share no words with the verse, when LM
+  // Studio is available. It names verses from memory, so each one is checked
+  // against its KJV text below before it becomes a card.
   const llmRefs = await llmClient.queryScriptures(text, contextText)
   const llmErr  = llmClient.getLastError()
   if (llmErr) {
@@ -319,11 +357,12 @@ chunker.on('chunk', async ({ text, chunkId, startAt, fireAt }) => {
     }
   }
 
+  const fromLlm = new Set(llmRefs)
   for (const ref of allRefs) {
     if (!ref.reference) continue
     if (!shouldSuggest(ref.reference)) continue
     const card = await bibleDb.lookupVerse(ref)
-    if (!card) {
+    if (!card || (fromLlm.has(ref) && !await llmClient.confirmVerse(text, card))) {
       sentRefs.delete(ref.reference)
       continue
     }
@@ -412,6 +451,7 @@ ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex = nul
   _transcriptWords = []
   readingContext.reset()
   _previousLine = ''
+  _judgeNext = null
   chunker.start()
 
   // Remember the choice so the next service starts configured.
