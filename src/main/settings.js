@@ -18,7 +18,7 @@ const DEFAULTS = {
   whisperModel: 'auto',   // the worker picks the best model for the GPU, or the CPU
   deviceIndex:  null,
   deviceName:   null,   // the device the index pointed to, since Windows renumbers devices
-  llmEndpoint:  'http://localhost:1234/v1',
+  llmEndpoint:  'http://127.0.0.1:1234/v1',
   confidenceFilter: 'all',   // 'all' | 'medium' | 'high'
 }
 
@@ -56,7 +56,11 @@ function validate(input) {
         if (value === null || (typeof value === 'string' && value.length <= 200)) out.deviceName = value
         break
       case 'llmEndpoint':
-        if (typeof value === 'string' && /^https?:\/\//i.test(value)) out.llmEndpoint = value
+        // "localhost" costs about 2 s per new connection on Windows (IPv6 is
+        // tried first), so saved values from older versions are rewritten.
+        if (typeof value === 'string' && /^https?:\/\//i.test(value)) {
+          out.llmEndpoint = value.replace(/^(https?:\/\/)localhost(?=[:/]|$)/i, '$1127.0.0.1')
+        }
         break
       case 'confidenceFilter':
         if (VALID_FILTERS.has(value)) out.confidenceFilter = value
@@ -95,4 +99,4 @@ function save(patch) {
   return merged
 }
 
-module.exports = { load, save, DEFAULTS }
+module.exports = { load, save, validate, DEFAULTS }

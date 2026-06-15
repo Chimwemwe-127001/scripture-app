@@ -17,7 +17,8 @@ const bookNames = require('../src/main/bookNames')
 const extractor = require('../src/main/bibleExtractor')
 const bibleDb   = require('../src/main/bibleDb')
 const llmClient = require('../src/main/llmClient')
-const { VerseSearch, isStrong, stem } = require('../src/main/verseSearch')
+const { VerseSearch, isStrong, forJudge, stem } = require('../src/main/verseSearch')
+const settings  = require('../src/main/settings')
 
 let passed = 0
 let failed = 0
@@ -146,6 +147,32 @@ check('prose only',         parse('I found no references.'), [])
 // A response cut off by the token limit still yields its complete objects.
 check('truncated salvages', parse(`[${OBJ_A},${OBJ_B},{"reference":"Psalm 23:1","book":"Psal`),
   ['John 3:16', 'Romans 8:28'])
+// The compact format: bare references, about 6 tokens each.
+check('bare references',    parse('["John 3:16", "Romans 8:28-29"]'), ['John 3:16', 'Romans 8:28-29'])
+check('bare, cut off',      parse('["1 John 4:8", "Psalm 23:1", "Rom'), ['1 John 4:8', 'Psalm 23:1'])
+check('not a reference',    parse('["love one another"]'), [])
+
+// ---------------------------------------------------------------------------
+group('LLM judge answers')
+// ---------------------------------------------------------------------------
+check('picks a number',     llmClient.parseChoice('2', 5), 2)
+check('0 means none',       llmClient.parseChoice('0', 5), null)
+check('out of range',       llmClient.parseChoice('7', 5), null)
+check('no number',          llmClient.parseChoice('None of them', 5), null)
+check('confident yes',      llmClient.isConfirmed({ text: 'Yes', probs: { yes: 0.97 } }), true)
+// "God is good all the time" against 1 Timothy 4:4 got yes at 0.50.
+check('hesitant yes',       llmClient.isConfirmed({ text: 'Yes', probs: { yes: 0.5 } }), false)
+check('no',                 llmClient.isConfirmed({ text: 'No', probs: { no: 0.99 } }), false)
+check('yes, no probs given', llmClient.isConfirmed({ text: 'Yes', probs: {} }), true)
+check('LM Studio off',      llmClient.isConfirmed(null), false)
+
+// ---------------------------------------------------------------------------
+group('Settings')
+// ---------------------------------------------------------------------------
+const endpoint = (url) => settings.validate({ llmEndpoint: url }).llmEndpoint
+check('localhost rewritten', endpoint('http://localhost:1234/v1'), 'http://127.0.0.1:1234/v1')
+check('other host kept',     endpoint('http://192.168.1.20:1234/v1'), 'http://192.168.1.20:1234/v1')
+check('bad url ignored',     endpoint('ftp://x'), settings.DEFAULTS.llmEndpoint)
 
 // ---------------------------------------------------------------------------
 // DB-backed checks, skipped cleanly if the database has not been built.
@@ -197,6 +224,11 @@ check('truncated salvages', parse(`[${OBJ_A},${OBJ_B},{"reference":"Psalm 23:1",
     check('British spelling',   quoted('knowing that your labor is not in vain in the Lord'), '1 Corinthians 15:58')
     check('ordinary talk',      quoted('I want you to look at your neighbor and say, neighbor.'), null)
     check('church talk',        quoted('God is good all the time, and all the time God is good.'), null)
+    // Verses that share no phrase with the line never reach the LLM judge.
+    const judged = (line) => forJudge(search.search(line)).map(c => c.reference)
+    check('no shared phrase, no judge', judged('So now my question to you is, what is intimacy?'), [])
+    check('paraphrase goes to judge',
+      judged('God works everything together for the good of those who love him').includes('Romans 8:28'), true)
   }
 
   // -------------------------------------------------------------------------

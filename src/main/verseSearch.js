@@ -178,4 +178,14 @@ function isStrong(candidates, { longQuote = 25, minPairWeight = 12, minCoverage 
   return best.pairWeight >= minPairWeight && best.coverage >= minCoverage
 }
 
-module.exports = { VerseSearch, isStrong, analyse, stem }
+/**
+ * Candidates worth asking the LLM judge about: verses that share at least one
+ * distinctive phrase (two words in order) with what was said. A verse that
+ * only shares loose words is a topic match, not a quote. On our sermon
+ * recording, every false alarm the judge made was a verse like that.
+ */
+function forJudge(candidates, minPairWeight = 3) {
+  return candidates.filter(c => c.pairWeight >= minPairWeight)
+}
+
+module.exports = { VerseSearch, isStrong, forJudge, analyse, stem }

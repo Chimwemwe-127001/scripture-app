@@ -33,7 +33,7 @@ export default function App() {
 
   // LLM (LM Studio) status
   const [llmStatus, setLlmStatus]       = useState(null)   // { ok, model, error }
-  const [llmEndpoint, setLlmEndpoint]   = useState('http://localhost:1234/v1')
+  const [llmEndpoint, setLlmEndpoint]   = useState('http://127.0.0.1:1234/v1')
   const [bibleDbReady, setBibleDbReady] = useState(false)
 
   // VideoPsalm status

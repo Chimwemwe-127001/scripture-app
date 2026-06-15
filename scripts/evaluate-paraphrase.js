@@ -8,11 +8,14 @@
  *   search     whether the right verse is anywhere in the top 5 candidates
  *              (the most a judge could find)
  *   llm        the old way: ask the LLM to name verses from memory
+ *   checked    the LLM names verses from memory, then each is checked against
+ *              its KJV text (llmClient.confirmVerse)
  *   judge      strong quotes from keyword search, the rest decided by the LLM
- *              choosing among the top 5 candidates
+ *              choosing among the top 5 candidates that share a phrase with
+ *              the line (verseSearch.forJudge, llmClient.pickVerse)
  *
- * Usage: node scripts/evaluate-paraphrase.js [--methods keyword,search,llm,judge]
- * The llm and judge methods need LM Studio running.
+ * Usage: node scripts/evaluate-paraphrase.js [--methods keyword,search,llm,checked,judge]
+ * The llm, checked and judge methods need LM Studio running.
  */
 
 require('./electron-stub')
@@ -22,7 +25,7 @@ console.log = (...a) => { if (!(typeof a[0] === 'string' && /^\d{4}-\d\d-\d\dT/.
 
 const { performance } = require('perf_hooks')
 const bibleDb = require('../src/main/bibleDb')
-const { VerseSearch, isStrong } = require('../src/main/verseSearch')
+const { VerseSearch, isStrong, forJudge } = require('../src/main/verseSearch')
 const { items } = require('./eval-paraphrase.json')
 
 const arg = process.argv.indexOf('--methods')
@@ -39,7 +42,7 @@ const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s[Math.
   if (!search.verses.length) { console.log('Run npm run setup-bible first.'); process.exitCode = 1; return }
 
   let llm = null
-  if (METHODS.some(m => m === 'llm' || m === 'judge')) llm = require('../src/main/llmClient')
+  if (METHODS.some(m => ['llm', 'checked', 'judge'].includes(m))) llm = require('../src/main/llmClient')
 
   // Each method returns the verses it would put on a card for this line.
   const run = {
@@ -49,10 +52,17 @@ const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s[Math.
     },
     search: async (text) => search.search(text).map(c => c.reference),
     llm: async (text) => (await llm.queryScriptures(text)).map(r => r.reference),
+    checked: async (text) => {
+      for (const ref of await llm.queryScriptures(text)) {
+        const card = await bibleDb.lookupVerse(ref)
+        if (card && await llm.confirmVerse(text, card)) return [card.reference]
+      }
+      return []
+    },
     judge: async (text) => {
       const c = search.search(text)
       if (isStrong(c)) return [c[0].reference]
-      const pick = await llm.pickVerse(text, c)
+      const pick = await llm.pickVerse(text, forJudge(c))
       return pick ? [pick.reference] : []
     },
   }
