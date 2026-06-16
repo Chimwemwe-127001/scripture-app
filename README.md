@@ -20,7 +20,7 @@ That is what this project is. I built it around the seat I sit in myself: one pe
 
 - **Hears the verse.** Speech is transcribed locally with Whisper. Explicit citations ("Isaiah 40 verse 31") are picked up in microseconds by a rule-based detector.
 - **Catches the quote that was never named.** An optional local language model reads the last few sentences and suggests verses that were paraphrased or alluded to.
-- **One key to show it.** The most likely verse is always key `1`. It is typed into [VideoPsalm](https://www.videopsalm.com/) for you.
+- **One key to show it.** The most likely verse is always key `1`. It goes into [VideoPsalm](https://www.videopsalm.com/) in about a third of a second, and the panel shows the verse in VideoPsalm's own translation (NKJV, NIV...).
 - **Shows its reasoning.** Every suggestion says how it was found and what was heard, and hovering it highlights the exact words in the transcript.
 - **Never leaves the room.** Transcription, detection and the Bible all run on the machine. No audio is uploaded.
 
@@ -93,7 +93,7 @@ More detail, including the IPC contract and how each failure is handled, is in [
 | Speech-to-text | Python, [OpenAI Whisper](https://github.com/openai/whisper), sounddevice, NumPy |
 | Detection | JavaScript regular expressions, plus [LM Studio](https://lmstudio.ai/) with Mistral 7B Instruct (optional) |
 | Bible | KJV from [scrollmapper/bible_databases](https://github.com/scrollmapper/bible_databases) in SQLite via [sql.js](https://sql.js.org/), 31,102 verses |
-| Presentation | pywin32, pywinauto, psutil (types into VideoPsalm on Windows) |
+| Presentation | pywin32, pywinauto UI Automation, psutil (sends to VideoPsalm on Windows without taking focus) |
 | Quality | Regression tests, a labelled evaluation set, GitHub Actions CI |
 
 ---
@@ -214,8 +214,8 @@ Choose your input device in settings (`Ctrl+,`), press **Listen**, and verses wi
 - **Fewer false alarms.** Require a verse number for "Numbers" and "Daniel", like "Mark" and "Job" already do.
 - **Faster transcription.** Move from `openai-whisper` to `faster-whisper` or `whisper.cpp` to cut the delay and allow a shorter audio window.
 - **Measure it in a real service.** Record, label and score the paraphrase path and the true speech-to-screen time.
-- **More translations.** KJV only for now because it is public domain. The database already has a translation column.
-- **Packaging.** No code signing or auto-update yet. VideoPsalm control works by typing, so it briefly takes focus.
+- **More translations.** Detection searches KJV because it is public domain. What goes on screen is in whichever Bible VideoPsalm is using, and the On screen panel shows that text. VideoPsalm's Bible files are encrypted, so we read only what its window shows.
+- **Packaging.** No code signing or auto-update yet.
 
 ---
 

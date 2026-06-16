@@ -29,7 +29,7 @@ Written for the rest of our media team, and for anyone who takes the desk during
 
 ## Before the service
 
-1. Open VideoPsalm and make sure its reference search box is visible.
+1. Open VideoPsalm and choose the Bible you project from (KJV, NKJV...). It can stay behind our window; the app opens its Bibles tab when it needs it.
 2. Open Scripture Panel. Press `Ctrl+,` for settings.
 3. Choose the **input device** that carries the pulpit microphone. This is the most common mistake, so check it every time.
 4. Leave the **Whisper model** on `small` unless the PC has a good graphics card.
@@ -41,7 +41,7 @@ Your choices are saved, so next week you can usually go straight to step 5.
 
 ## During the service
 
-- When a verse appears at the top of **Next up**, check the reference and press `1`. It goes straight into VideoPsalm and moves to **On screen**.
+- When a verse appears at the top of **Next up**, check the reference and press `1`. It goes straight into VideoPsalm and moves to **On screen**, showing the verse as VideoPsalm shows it, in its translation. If VideoPsalm shows a different verse, a warning says so.
 - If the verse you want is lower down, press its number (`2` to `9`).
 - To send something shown earlier again, hover it under **Earlier** and click the resend icon.
 - Not sure where a card came from? Point at it. The transcript highlights the line and words it was detected from.
@@ -100,4 +100,5 @@ Press **Stop** (`Ctrl+L`). The On screen panel keeps the list of verses used, wh
 | "Transcription is falling behind" | The model is too heavy for this PC. Stop, choose a smaller model, start again. |
 | **KJV missing** in the top bar | The Bible database was not built. Run `npm run setup-bible` once. |
 | **LM Studio off** | Fine if you do not use it. Otherwise start the server in LM Studio and load a chat model. |
-| Send does nothing, or "VideoPsalm did not respond" | VideoPsalm must be open with its reference box visible. The bridge restarts itself, so try again. Do not type elsewhere while it sends, because it types into VideoPsalm for you. |
+| "VideoPsalm is not open" | Open VideoPsalm 1.29 or later. It does not need to be in front. |
+| "VideoPsalm did not respond" | The bridge restarts itself, so try again. If it keeps happening, restart VideoPsalm. |

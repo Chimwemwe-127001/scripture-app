@@ -20,7 +20,7 @@ How the pieces fit together: which process does what, how they talk, and what ha
 flowchart LR
     subgraph Python
       W[whisper_worker.py<br/>speech to text]
-      VP[videopsalm_bridge.py<br/>types into VideoPsalm]
+      VP[videopsalm_bridge.py<br/>sends to VideoPsalm, reads back the verse]
       LD[list_devices.py]
     end
     subgraph Electron
@@ -46,7 +46,7 @@ flowchart LR
 | Renderer | React | App lifetime | Shows state and sends operator actions. Has no Node access. |
 | Preload | Node.js | App lifetime | Exposes a fixed list of functions to the renderer |
 | `whisper_worker.py` | Python | While listening | Captures audio, runs Whisper, prints one JSON message per line |
-| `videopsalm_bridge.py` | Python | Started on first use, then kept alive | Finds VideoPsalm's reference box and types into it |
+| `videopsalm_bridge.py` | Python | Started on first use, then kept alive | Posts the reference to VideoPsalm's reference box (no focus needed) and reads the shown verse through UI Automation |
 | `list_devices.py` | Python | One call | Lists usable microphones as JSON |
 
 Python is used where the libraries are: Whisper, sounddevice and the Windows automation packages. Everything else stays in the main process so there is one place that owns state.
@@ -78,7 +78,7 @@ The renderer can only call what [`src/preload/index.js`](../src/preload/index.js
 | `startListening({ model, deviceIndex })` | `start-listening` | `{ started }` |
 | `stopListening()` | `stop-listening` | `{ stopped }` |
 | `lookupReference(query)` | `lookup-reference` | `{ ok, cards }` or `{ ok: false, error }` |
-| `sendToVideoPsalm(reference)` | `send-to-videopsalm` | `{ ok, error? }` |
+| `sendToVideoPsalm(reference)` | `send-to-videopsalm` | `{ ok, error?, shown?: { verses, translation } }` |
 | `checkVideoPsalm()` | `check-videopsalm` | `{ running }` |
 | `checkLlmStatus()` | `check-llm-status` | `{ ok, model, error }` |
 | `setLlmEndpoint(url)` | `set-llm-endpoint` | same as above |
