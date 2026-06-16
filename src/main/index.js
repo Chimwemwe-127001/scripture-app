@@ -523,8 +523,10 @@ ipcMain.handle('check-videopsalm', async () => {
 
 ipcMain.handle('send-to-videopsalm', async (_e, reference) => {
   try {
+    const t0 = Date.now()
     const result = await callVpBridge({ action: 'send', reference })
     if (!result?.ok) log.warn('vpBridge', 'Send failed', { reference, error: result?.error })
+    else log.info('vpBridge', 'On screen', { reference, ms: Date.now() - t0, translation: result.shown?.translation })
     return result
   } catch (err) {
     log.error('vpBridge', 'Send threw', { reference, error: err.message })
