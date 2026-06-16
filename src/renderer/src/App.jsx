@@ -11,6 +11,22 @@ const SUGGESTION_TTL_MS = 5 * 60 * 1000  // 5 minutes
 
 const api = window.electronAPI   // undefined outside Electron
 
+/**
+ * What VideoPsalm reports it is showing, in its own translation (NKJV, NIV...),
+ * so the On screen panel matches the projector. Nothing if it reported nothing.
+ */
+function fromVideoPsalm(scripture, shown) {
+  if (!shown?.verses?.length) return {}
+  const first = shown.verses[0].verse
+  return {
+    text: shown.verses.map(v => v.text).join(' '),
+    translation: shown.translation,
+    mismatch: scripture.verseStart && first !== scripture.verseStart
+      ? `VideoPsalm shows verse ${first}, not ${scripture.verseStart}`
+      : null,
+  }
+}
+
 export default function App() {
   const [segments, setSegments]         = useState([])   // transcript segments
   const [suggestions, setSuggestions]   = useState([])
@@ -175,7 +191,7 @@ export default function App() {
     try {
       const result = await api.sendToVideoPsalm(scripture.reference)
       if (result?.ok) {
-        handleSent(scripture, true)
+        handleSent(scripture, true, result.shown)
         return { ok: true }
       }
       const msg = result?.error || 'Unknown error'
@@ -363,13 +379,13 @@ export default function App() {
   // Called by ScriptureCard when user clicks card body (viaPsalm=false)
   // or clicks Send to Screen button (viaPsalm=true, called from SendToScreenBtn)
   // ------------------------------------------------------------------
-  const handleSent = (scripture, viaPsalm = false) => {
+  const handleSent = (scripture, viaPsalm = false, shown = null) => {
     setSentHistory(prev => {
       // Avoid exact duplicates within 5s (e.g. double-click)
       const recent = prev.find(s => s.reference === scripture.reference &&
         Date.now() - s.sentAt < 5000)
       if (recent) return prev
-      return [...prev, { ...scripture, sentAt: Date.now(), sentToVP: viaPsalm }]
+      return [...prev, { ...scripture, ...fromVideoPsalm(scripture, shown), sentAt: Date.now(), sentToVP: viaPsalm }]
     })
   }
 

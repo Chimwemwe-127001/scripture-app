@@ -42,6 +42,7 @@ function LiveVerse({ item, onResend }) {
           {item.reference}
           <span className="ml-2 font-mono text-[11px] font-normal text-fg-3">{item.translation}</span>
         </h3>
+        {item.mismatch && <p role="alert" className="mt-2 text-[13px] text-warn">{item.mismatch}</p>}
         <p className="mt-2 font-serif text-[16px] leading-[1.55] text-fg line-clamp-6">{item.text}</p>
         <button
           onClick={resend}
