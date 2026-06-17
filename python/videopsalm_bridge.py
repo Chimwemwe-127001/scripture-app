@@ -36,6 +36,11 @@ REFERENCE_BOX = 'buttonEditSearchBibleReference'
 BIBLE_LIST = 'searchLookUpEditBibleList'
 VERSE_GRID = 'gridControlSequence'
 BIBLES_TAB = 'Bibles'   # the tab button; the reference box only exists while it is open
+PROJECTIONS = 'layoutControlProjections'   # the panel holding the Bible buttons (KJV, NKJV...)
+
+# Buttons in that panel that are not Bibles.
+NOT_BIBLES = {'Songbooks', 'Bibles', 'Add', 'Open', 'Column Left', 'Column Right',
+              'Page Left', 'Page Right', 'Line Up', 'Line Down', 'Page Up', 'Page Down'}
 
 READ_TIMEOUT_S = 1.0   # how long to wait for VideoPsalm to show the verse
 
@@ -109,6 +114,7 @@ def controls(vp_hwnd):
         open_bibles_tab(found)          # the box is missing while Songbooks is open
         found['box'] = _find(root, aid, REFERENCE_BOX)
     found['bible'] = _find(root, aid, BIBLE_LIST)
+    found['panel'] = _find(root, aid, PROJECTIONS)
     found['grid'] = _find(root, aid, VERSE_GRID)
     _cache.clear()
     _cache[vp_hwnd] = found
@@ -148,6 +154,58 @@ def translation_of(ctrl):
     return name, (m.group(1) if m else name)
 
 
+def bible_buttons(ctrl):
+    """VideoPsalm's favourite Bibles, as buttons: {'KJV': wrapper, 'NIV84': wrapper}."""
+    from pywinauto.uia_element_info import UIAElementInfo
+    from pywinauto.controls.uiawrapper import UIAWrapper
+    cond = _uia.iuia.CreatePropertyCondition(
+        _uia.UIA_dll.UIA_ControlTypePropertyId, _uia.UIA_dll.UIA_ButtonControlTypeId)
+    found = ctrl['panel'].element_info.element.FindAll(_uia.tree_scope['descendants'], cond)
+    buttons = {}
+    for i in range(found.Length):
+        w = UIAWrapper(UIAElementInfo(found.GetElement(i)))
+        name = w.element_info.name
+        # Bible buttons carry short abbreviations: KJV, NIV84, MSG-Alt.
+        short = name and re.fullmatch(r'[A-Za-z0-9-]{2,10}', name)
+        if short and name not in NOT_BIBLES and w.element_info.rectangle.width() > 0:
+            buttons[name] = w
+    return buttons
+
+
+def list_bibles():
+    """(ok, error, {'bibles': [...], 'current': 'KJV'})"""
+    vp_hwnd = find_vp_hwnd()
+    if not vp_hwnd:
+        return False, 'VideoPsalm is not open', None
+    ctrl = controls(vp_hwnd)
+    if not win32gui.IsWindowVisible(ctrl['box'].handle):
+        open_bibles_tab(ctrl)
+    _, short = translation_of(ctrl)
+    return True, None, {'bibles': list(bible_buttons(ctrl)), 'current': short}
+
+
+def set_bible(name):
+    """Press one of VideoPsalm's Bible buttons; (ok, error, {'current': ...})."""
+    vp_hwnd = find_vp_hwnd()
+    if not vp_hwnd:
+        return False, 'VideoPsalm is not open', None
+    ctrl = controls(vp_hwnd)
+    if not win32gui.IsWindowVisible(ctrl['box'].handle):
+        open_bibles_tab(ctrl)
+    button = bible_buttons(ctrl).get(name)
+    if not button:
+        return False, f"{name} is not one of VideoPsalm's Bibles", None
+    button.invoke()
+    deadline = time.monotonic() + READ_TIMEOUT_S
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        full, short = translation_of(ctrl)
+        if short.upper().replace('-', '') == name.upper().replace('-', '') or name.lower() in full.lower():
+            break
+    full, short = translation_of(ctrl)
+    return True, None, {'current': short, 'currentName': full}
+
+
 def first_verse(reference):
     m = re.search(r':\s*(\d+)', reference)
     return int(m.group(1)) if m else None
@@ -185,12 +243,12 @@ def send_reference(reference):
     return True, None, {'verses': shown, 'translation': short, 'translationName': name}
 
 
-def result_json(ok, error, shown):
+def result_json(ok, error, shown, key='shown'):
     result = {'ok': ok}
     if error:
         result['error'] = error
     if shown:
-        result['shown'] = shown
+        result[key] = shown
     return json.dumps(result)
 
 
@@ -220,11 +278,17 @@ if __name__ == "__main__":
             action = cmd.get("action")
             if action == "check":
                 print(json.dumps({"running": is_running()}), flush=True)
-            elif action == "send":
+            elif action in ("send", "bibles", "set-bible"):
                 try:
-                    print(result_json(*send_reference(cmd.get("reference", ""))), flush=True)
+                    if action == "send":
+                        out = result_json(*send_reference(cmd.get("reference", "")))
+                    elif action == "bibles":
+                        out = result_json(*list_bibles(), key='result')
+                    else:
+                        out = result_json(*set_bible(cmd.get("name", "")), key='result')
                 except Exception as e:
-                    print(result_json(False, str(e), None), flush=True)
+                    out = result_json(False, str(e), None)
+                print(out, flush=True)
             else:
                 print(json.dumps({"ok": False, "error": f"Unknown action: {action}"}), flush=True)
         sys.exit(0)
