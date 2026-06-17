@@ -19,6 +19,7 @@ const bibleDb   = require('../src/main/bibleDb')
 const llmClient = require('../src/main/llmClient')
 const { VerseSearch, isStrong, forJudge, stem } = require('../src/main/verseSearch')
 const settings  = require('../src/main/settings')
+const { detectTranslations, matchBible } = require('../src/main/translationRequest')
 
 let passed = 0
 let failed = 0
@@ -165,6 +166,26 @@ check('hesitant yes',       llmClient.isConfirmed({ text: 'Yes', probs: { yes: 0
 check('no',                 llmClient.isConfirmed({ text: 'No', probs: { no: 0.99 } }), false)
 check('yes, no probs given', llmClient.isConfirmed({ text: 'Yes', probs: {} }), true)
 check('LM Studio off',      llmClient.isConfirmed(null), false)
+
+// ---------------------------------------------------------------------------
+group('Translation requests')
+// ---------------------------------------------------------------------------
+const asked = (s) => detectTranslations(s).map(t => t.code)
+check('NIV',                  asked('Let us read that from the NIV.'), ['NIV'])
+check('spelled out by Whisper', asked('In the N.I.V. it says'), ['NIV'])
+check('letters with spaces',  asked('turn to the N K J V please'), ['NKJV'])
+check('New King James, not KJV', asked('the New King James Version says'), ['NKJV'])
+check('King James',           asked('the King James puts it this way'), ['KJV'])
+check('two in order',         asked('the Amplified, then the New Living Translation'), ['AMP', 'NLT'])
+check('"the message" alone is not a request', asked('the message of the cross is simple'), [])
+check('The Message translation', asked('in the Message translation it says'), ['MSG'])
+check('ordinary talk',        asked('God loves you and has a plan for your life'), [])
+const VP = ['AMP', 'AMPC', 'GNT', 'KJV', 'MSG-Alt', 'NIV84', 'NKJV', 'NLT', 'TPT']
+check('NIV is NIV84',         matchBible('NIV', VP), 'NIV84')
+check('AMP exact over AMPC',  matchBible('AMP', VP), 'AMP')
+check('MSG is MSG-Alt',       matchBible('MSG', VP), 'MSG-Alt')
+check('KJV not NKJV',         matchBible('KJV', VP), 'KJV')
+check('ESV missing',          matchBible('ESV', VP), null)
 
 // ---------------------------------------------------------------------------
 group('Settings')

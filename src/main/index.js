@@ -7,6 +7,7 @@ const bibleDb        = require('./bibleDb')
 const bibleExtractor = require('./bibleExtractor')
 const { ReadingContext } = require('./readingContext')
 const { VerseSearch, isStrong, forJudge } = require('./verseSearch')
+const { detectTranslations, matchBible } = require('./translationRequest')
 const settings       = require('./settings')
 const log            = require('./logger')
 
@@ -303,6 +304,20 @@ async function runJudge() {
   }
 }
 
+// "Read it from the NIV": tell the operator, who decides whether to switch
+// VideoPsalm. The same translation is not suggested again within a minute.
+const _translationAsked = new Map()   // code -> time last suggested
+
+function noticeTranslationRequest(text) {
+  for (const { code, heard } of detectTranslations(text)) {
+    const last = _translationAsked.get(code)
+    if (last && Date.now() - last < 60_000) continue
+    _translationAsked.set(code, Date.now())
+    log.info('pipeline', 'Translation asked for', { code, heard })
+    mainWindow?.webContents.send('translation-request', { code, heard, at: Date.now() })
+  }
+}
+
 /** A verseSearch candidate as a reference for bibleDb.lookupVerse. */
 function asRef(c) {
   return { reference: c.reference, book: c.book, chapter: c.chapter, verse_start: c.verse }
@@ -392,6 +407,7 @@ function handleWhisperMessage(msg) {
       mainWindow?.webContents.send('transcript-update', msg)
       chunker.addText(msg.text)
       processInstantRefs(msg.text)
+      noticeTranslationRequest(msg.text)
 
       const incoming = msg.text.trim().split(/\s+/).filter(Boolean)
       _transcriptWords.push(...incoming)
@@ -450,6 +466,7 @@ ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex = nul
   sentRefs = new Map()
   _transcriptWords = []
   readingContext.reset()
+  _translationAsked.clear()
   _previousLine = ''
   _judgeNext = null
   chunker.start()
@@ -530,6 +547,25 @@ ipcMain.handle('send-to-videopsalm', async (_e, reference) => {
     return result
   } catch (err) {
     log.error('vpBridge', 'Send threw', { reference, error: err.message })
+    return { ok: false, error: err.message }
+  }
+})
+
+// Switch VideoPsalm's Bible to a translation code such as 'NIV'. VideoPsalm
+// names some Bibles its own way ('NIV84'), so the code is matched against its
+// favourite Bible buttons first.
+ipcMain.handle('set-videopsalm-bible', async (_e, code) => {
+  try {
+    const listed = await callVpBridge({ action: 'bibles' })
+    if (!listed?.ok) return { ok: false, error: listed?.error || 'VideoPsalm did not answer' }
+    const name = matchBible(code, listed.result.bibles)
+    if (!name) {
+      return { ok: false, error: `${code} is not among VideoPsalm's Bibles (${listed.result.bibles.join(', ')})` }
+    }
+    const result = await callVpBridge({ action: 'set-bible', name })
+    if (result?.ok) log.info('vpBridge', 'Bible switched', { code, name })
+    return result?.ok ? { ok: true, translation: result.result.current } : { ok: false, error: result?.error }
+  } catch (err) {
     return { ok: false, error: err.message }
   }
 })

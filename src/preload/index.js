@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // VideoPsalm integration
   checkVideoPsalm:  () => ipcRenderer.invoke('check-videopsalm'),
   sendToVideoPsalm: (reference) => ipcRenderer.invoke('send-to-videopsalm', reference),
+  setVideoPsalmBible: (code) => ipcRenderer.invoke('set-videopsalm-bible', code),
 
   // Incoming events from main process
   onTranscript:          (cb) => ipcRenderer.on('transcript-update',    (_e, d) => cb(d)),
@@ -43,6 +44,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLlmError:            (cb) => ipcRenderer.on('llm-error',            (_e, d) => cb(d)),
   onAnalyzing:           (cb) => ipcRenderer.on('scripture-analyzing',      (_e, d) => cb(d)),
   onAnalyzingDone:       (cb) => ipcRenderer.on('scripture-analyzing-done', (_e, d) => cb(d)),
+  onTranslationRequest:  (cb) => ipcRenderer.on('translation-request',  (_e, d) => cb(d)),
 
   removeAllListeners: (ch) => ipcRenderer.removeAllListeners(ch),
 })
