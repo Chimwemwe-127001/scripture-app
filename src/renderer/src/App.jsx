@@ -5,9 +5,11 @@ import TranscriptPanel from './components/TranscriptPanel'
 import SuggestionPanel from './components/SuggestionPanel'
 import OnScreenPanel from './components/OnScreenPanel'
 import StatusBar from './components/StatusBar'
+import TranslationRequest from './components/TranslationRequest'
 
 const SUGGESTION_MAX  = 10
 const SUGGESTION_TTL_MS = 5 * 60 * 1000  // 5 minutes
+const TRANSLATION_ASK_TTL_MS = 2 * 60 * 1000   // a translation request fades after 2 minutes
 
 const api = window.electronAPI   // undefined outside Electron
 
@@ -39,6 +41,8 @@ export default function App() {
   const [statusMsg, setStatusMsg]       = useState('')
   const [errorMsg, setErrorMsg]         = useState('')
   const [notice, setNotice]             = useState('')   // short confirmation in the status bar
+  // The preacher asked for a translation, e.g. { code: 'NIV', heard: 'niv', at }
+  const [translationAsk, setTranslationAsk] = useState(null)
 
   // Chunks the LLM is still reading, for the "reading" indicator.
   const [analyzingChunks, setAnalyzingChunks] = useState([])   // [{chunkId, startAt, fireAt}]
@@ -138,6 +142,7 @@ export default function App() {
       const cutoff = Date.now() - SUGGESTION_TTL_MS
       setSuggestions(prev => prev.filter(s => !s.addedAt || s.addedAt > cutoff))
       setLinks(prev => prev.filter(l => l.addedAt > cutoff))
+      setTranslationAsk(prev => (prev && Date.now() - prev.at > TRANSLATION_ASK_TTL_MS ? null : prev))
     }, 60_000)
     return () => clearInterval(id)
   }, [])
@@ -202,6 +207,25 @@ export default function App() {
       setErrorMsg(`VideoPsalm: ${msg}`)
       return { ok: false, error: msg }
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Translation requests: switch VideoPsalm's Bible when the operator says so,
+  // then show the verse already on screen again in that translation.
+  // ------------------------------------------------------------------
+  async function switchBible() {
+    const ask = translationAsk
+    if (!ask || !api?.setVideoPsalmBible) return
+    const result = await api.setVideoPsalmBible(ask.code)
+    if (!result?.ok) {
+      setErrorMsg(`VideoPsalm: ${result?.error || 'could not switch Bible'}`)
+      return
+    }
+    setTranslationAsk(null)
+    const live = [...sentHistory].reverse().find(h => h.sentToVP)
+    if (live) await sendToScreen(live)
+    setNotice(`VideoPsalm now uses ${result.translation}${live ? `, ${live.reference} shown again` : ''}`)
+    setTimeout(() => setNotice(''), 4000)
   }
 
   // ------------------------------------------------------------------
@@ -272,6 +296,7 @@ export default function App() {
         return [{ ...card, addedAt }, ...prev.filter(s => !replacesGuess(s))].slice(0, SUGGESTION_MAX)
       })
     })
+    api.onTranslationRequest?.((ask) => setTranslationAsk(ask))
     api.onLlmError?.((data) => {
       setErrorMsg(`LM Studio error: ${data.message || 'Channel Error. Try reloading the model in LM Studio.'}`)
     })
@@ -284,7 +309,7 @@ export default function App() {
 
     return () => {
       ['transcript-update', 'transcript-partial', 'listening-status', 'listening-error', 'scripture-suggestion',
-       'llm-error', 'scripture-analyzing', 'scripture-analyzing-done'].forEach(
+       'llm-error', 'scripture-analyzing', 'scripture-analyzing-done', 'translation-request'].forEach(
         ch => api.removeAllListeners(ch)
       )
     }
@@ -326,6 +351,12 @@ export default function App() {
         return
       }
 
+      if (!e.ctrlKey && !e.altKey && (e.key === 't' || e.key === 'T') && translationAsk) {
+        e.preventDefault()
+        switchBible()
+        return
+      }
+
       if (e.key === 'Escape') {
         // Escape only dismisses transient UI. Clearing suggestions needs the
         // explicit Clear button, because Escape is pressed by reflex.
@@ -336,7 +367,7 @@ export default function App() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [isListening, suggestions, errorMsg, notice])
+  }, [isListening, suggestions, errorMsg, notice, translationAsk, sentHistory])
 
   // ------------------------------------------------------------------
   // LLM auto-retry: poll every 30s when LLM is disconnected
@@ -428,6 +459,11 @@ export default function App() {
           bibleDbReady={bibleDbReady}
         />
       )}
+      <TranslationRequest
+        request={translationAsk}
+        onSwitch={switchBible}
+        onDismiss={() => setTranslationAsk(null)}
+      />
       <div className="flex flex-1 min-h-0 gap-px bg-line">
         <TranscriptPanel
           segments={segments}
