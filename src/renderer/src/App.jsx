@@ -69,6 +69,7 @@ export default function App() {
   const [devices, setDevices]             = useState([])
 
   const [settingsOpen, setSettingsOpen]   = useState(false)
+  const [miniOn, setMiniOn]               = useState(false)   // panel docked to VideoPsalm
   const [listeningSince, setListeningSince] = useState(null)
 
   // Strictly increasing segment ids, unique even within one millisecond.
@@ -99,6 +100,7 @@ export default function App() {
       if (!saved) return
       if (saved.whisperModel) setWhisperModel(saved.whisperModel)
       if (saved.llmEndpoint) setLlmEndpoint(saved.llmEndpoint)
+      setMiniOn(!!saved.miniPanel)
     })
 
     // The input is saved by name as well as index, because Windows renumbers
@@ -207,6 +209,18 @@ export default function App() {
       setErrorMsg(`VideoPsalm: ${msg}`)
       return { ok: false, error: msg }
     }
+  }
+
+  // Send the Nth suggestion (1-based), from a number key here or in the mini panel.
+  function sendByNumber(n) {
+    const target = suggestions[n - 1]
+    if (!target) return false
+    setNotice(`Sending ${target.reference} to VideoPsalm`)
+    sendToScreen(target).then(r => {
+      setNotice(r.ok ? `${target.reference} is on screen` : '')
+      setTimeout(() => setNotice(''), 4000)
+    })
+    return true
   }
 
   // ------------------------------------------------------------------
@@ -338,16 +352,7 @@ export default function App() {
       // Number keys send the Nth suggestion straight to VideoPsalm.
       // In a booth, reaching for the mouse costs real seconds mid-service.
       if (!e.ctrlKey && !e.altKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
-        const idx = Number(e.key) - 1
-        const target = suggestions[idx]
-        if (target) {
-          e.preventDefault()
-          setNotice(`Sending ${target.reference} to VideoPsalm`)
-          sendToScreen(target).then(r => {
-            setNotice(r.ok ? `${target.reference} is on screen` : '')
-            setTimeout(() => setNotice(''), 4000)
-          })
-        }
+        if (sendByNumber(Number(e.key))) e.preventDefault()
         return
       }
 
@@ -368,6 +373,48 @@ export default function App() {
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [isListening, suggestions, errorMsg, notice, translationAsk, sentHistory])
+
+  // ------------------------------------------------------------------
+  // Mini panel: publish what it shows, and act on its buttons and keys.
+  // The handlers are read through a ref so they always see current state.
+  // ------------------------------------------------------------------
+  const [publishTick, setPublishTick] = useState(0)
+  const miniActions = useRef({})
+  miniActions.current = {
+    send: ({ number }) => sendByNumber(number),
+    'switch-bible': () => switchBible(),
+    'dismiss-translation': () => setTranslationAsk(null),
+    'toggle-listen': () => (isListening ? handleStopListening() : handleStartListening()),
+    publish: () => setPublishTick(t => t + 1),
+  }
+
+  useEffect(() => {
+    if (!api?.onMiniAction) return
+    api.onMiniAction((action) => miniActions.current[action?.type]?.(action))
+    return () => api.removeAllListeners('mini-action')
+  }, [])
+
+  useEffect(() => {
+    if (!miniOn || !api?.publishMiniState) return
+    const live = [...sentHistory].reverse().find(h => h.sentToVP)
+    api.publishMiniState({
+      suggestions: suggestions.slice(0, 9).map(s => ({
+        id: s.id, reference: s.reference, text: s.text, trigger: s.trigger, chapterOnly: s.chapterOnly,
+      })),
+      live: live ? { reference: live.reference, translation: live.translation, mismatch: live.mismatch } : null,
+      translationAsk,
+      isListening,
+      isStarting,
+      vpStatus,
+      notice,
+      error: errorMsg,
+    })
+  }, [miniOn, publishTick, suggestions, sentHistory, translationAsk, isListening, isStarting, vpStatus, notice, errorMsg])
+
+  async function toggleMini() {
+    const on = await api?.setMiniPanel?.(!miniOn)
+    setMiniOn(!!on)
+  }
 
   // ------------------------------------------------------------------
   // LLM auto-retry: poll every 30s when LLM is disconnected
@@ -441,6 +488,8 @@ export default function App() {
         vpStatus={vpStatus}
         bibleDbReady={bibleDbReady}
         onToggleListen={isListening ? handleStopListening : handleStartListening}
+        miniOn={miniOn}
+        onToggleMini={toggleMini}
         settingsOpen={settingsOpen}
         onToggleSettings={() => setSettingsOpen(open => !open)}
       />

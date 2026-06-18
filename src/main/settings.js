@@ -20,6 +20,9 @@ const DEFAULTS = {
   deviceName:   null,   // the device the index pointed to, since Windows renumbers devices
   llmEndpoint:  'http://127.0.0.1:1234/v1',
   confidenceFilter: 'all',   // 'all' | 'medium' | 'high'
+  miniPanel: true,           // the small panel docked to VideoPsalm
+  miniCollapsed: false,
+  miniOffset: { x: 8, y: 165, w: 360, h: 250 },   // from VideoPsalm's top-left corner, in DIPs
 }
 
 // Only these keys are accepted, so a hand-edited or stale file cannot inject
@@ -65,6 +68,18 @@ function validate(input) {
       case 'confidenceFilter':
         if (VALID_FILTERS.has(value)) out.confidenceFilter = value
         break
+      case 'miniPanel':
+      case 'miniCollapsed':
+        if (typeof value === 'boolean') out[key] = value
+        break
+      case 'miniOffset': {
+        const ok = (n, lo, hi) => Number.isFinite(n) && n >= lo && n <= hi
+        if (value && ok(value.x, -4000, 8000) && ok(value.y, -4000, 8000) &&
+            ok(value.w, 240, 1200) && ok(value.h, 120, 1200)) {
+          out.miniOffset = { x: Math.round(value.x), y: Math.round(value.y), w: Math.round(value.w), h: Math.round(value.h) }
+        }
+        break
+      }
     }
   }
   return out

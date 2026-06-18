@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import Mini from './Mini'
 
 // Fonts are bundled with the app so a booth PC without internet looks the same.
 // Latin subsets only: the KJV text and the UI need nothing else.
@@ -15,6 +16,6 @@ import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    {window.location.hash === '#mini' ? <Mini /> : <App />}
   </React.StrictMode>
 )

@@ -20,6 +20,8 @@ That is what this project is. I built it around the seat I sit in myself: one pe
 
 - **Hears the verse.** Speech is transcribed locally with Whisper. Explicit citations ("Isaiah 40 verse 31") are picked up in microseconds by a rule-based detector.
 - **Catches the quote that was never named.** An optional local language model reads the last few sentences and suggests verses that were paraphrased or alluded to.
+- **Works from VideoPsalm.** A small panel docks onto VideoPsalm's window, so the full app can stay minimised.
+- **Hears translation requests.** "Read it in the NIV" offers a one-key switch of VideoPsalm's Bible.
 - **One key to show it.** The most likely verse is always key `1`. It goes into [VideoPsalm](https://www.videopsalm.com/) in about a third of a second, and the panel shows the verse in VideoPsalm's own translation (NKJV, NIV...).
 - **Shows its reasoning.** Every suggestion says how it was found and what was heard, and hovering it highlights the exact words in the transcript.
 - **Never leaves the room.** Transcription, detection and the Bible all run on the machine. No audio is uploaded.

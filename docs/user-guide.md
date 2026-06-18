@@ -45,6 +45,19 @@ Your choices are saved, so next week you can usually go straight to step 5.
 - If the verse you want is lower down, press its number (`2` to `9`).
 - To send something shown earlier again, hover it under **Earlier** and click the resend icon.
 - Not sure where a card came from? Point at it. The transcript highlights the line and words it was detected from.
+- When the preacher asks for a translation ("read it from the NIV"), a bar says **Preacher asked for NIV**. Press **Switch** or `T` and VideoPsalm changes to that Bible, and the verse on screen is shown again in it. Nothing changes until you press. The Bible must be one of VideoPsalm's favourites (the buttons above its Bible list).
+
+### Working from VideoPsalm: the mini panel
+
+You do not need the full window open. Click **Mini panel** in the top bar once (it is remembered) and a small panel sits on VideoPsalm's window, over its Agenda area:
+
+- It shows the top suggestions with their numbers, what is on screen and in which translation, and translation requests.
+- Click a suggestion, or click the panel and press `1` to `9`, to send it. `T` switches Bible, `Ctrl+L` starts or stops listening.
+- Drag it by its title strip to wherever suits your layout; it remembers the spot relative to VideoPsalm and follows VideoPsalm when it moves.
+- It shows only while VideoPsalm (or the panel) is in front, and hides when VideoPsalm is minimised or you switch to another program.
+- `_` folds it down to its title strip. **Full** brings back the full window.
+
+The full window can stay minimised behind VideoPsalm the whole service; it does the work for the panel.
 
 Clicking a card without pressing Send marks it as used (it goes to Earlier) without putting it on screen. This is useful if you put the verse up another way.
 
@@ -83,7 +96,8 @@ Press **Stop** (`Ctrl+L`). The On screen panel keeps the list of verses used, wh
 
 | Key | Action |
 |---|---|
-| `1` to `9` | Send that card to VideoPsalm |
+| `1` to `9` | Send that card to VideoPsalm (also in the mini panel) |
+| `T` | Switch VideoPsalm to the translation the preacher asked for |
 | `Ctrl+F` | Jump to the lookup box |
 | `Ctrl+L` | Start or stop listening |
 | `Ctrl+,` | Open or close settings |
