@@ -79,7 +79,7 @@ function ListenButton({ isListening, isStarting, onToggle }) {
 export default function TopBar({
   isListening, isStarting, listeningSince, statusMsg,
   whisperModel, engine, llmStatus, vpStatus, bibleDbReady,
-  onToggleListen, settingsOpen, onToggleSettings,
+  onToggleListen, settingsOpen, onToggleSettings, miniOn, onToggleMini,
 }) {
   // While listening, show what the worker really loaded and where it runs.
   const running = engine ? `${engine.model} · ${engine.device === 'cuda' ? 'GPU' : 'CPU'}` : whisperModel
@@ -133,6 +133,16 @@ export default function TopBar({
           title={bibleDbReady ? 'Bible database loaded' : 'Run npm run setup-bible'}
         />
       </div>
+
+      <button
+        onClick={onToggleMini}
+        aria-pressed={miniOn}
+        title={miniOn ? 'Hide the panel docked to VideoPsalm' : 'Show a small panel docked to VideoPsalm'}
+        className={`h-8 px-2.5 rounded-md text-[12px] transition-colors
+          ${miniOn ? 'bg-ink-3 text-fg' : 'text-fg-2 hover:bg-ink-2 hover:text-fg'}`}
+      >
+        Mini panel
+      </button>
 
       <button
         onClick={onToggleSettings}
