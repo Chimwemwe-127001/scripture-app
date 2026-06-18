@@ -47,6 +47,7 @@ flowchart LR
 | Preload | Node.js | App lifetime | Exposes a fixed list of functions to the renderer |
 | `whisper_worker.py` | Python | While listening | Captures audio, runs Whisper, prints one JSON message per line |
 | `videopsalm_bridge.py` | Python | Started on first use, then kept alive | Posts the reference to VideoPsalm's reference box (no focus needed) and reads the shown verse through UI Automation |
+| `vp_window_watch.py` | Python | While the mini panel is on | Reports VideoPsalm's window position and which program is in front, five times a second, so `miniPanel.js` keeps the panel docked |
 | `list_devices.py` | Python | One call | Lists usable microphones as JSON |
 
 Python is used where the libraries are: Whisper, sounddevice and the Windows automation packages. Everything else stays in the main process so there is one place that owns state.
