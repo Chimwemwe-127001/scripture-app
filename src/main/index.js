@@ -9,6 +9,7 @@ const { ReadingContext } = require('./readingContext')
 const { VerseSearch, isStrong, forJudge } = require('./verseSearch')
 const { detectTranslations, matchBible } = require('./translationRequest')
 const settings       = require('./settings')
+const miniPanel      = require('./miniPanel')
 const log            = require('./logger')
 
 let mainWindow = null
@@ -649,7 +650,10 @@ function createWindow() {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      contextIsolation: true
+      contextIsolation: true,
+      // The mini panel works through this window, so it must keep running
+      // while minimised behind VideoPsalm.
+      backgroundThrottling: false,
     }
   })
 
@@ -665,13 +669,22 @@ function createWindow() {
       }
     })
   })
-  mainWindow.on('closed', () => { killWhisper(); mainWindow = null })
+  mainWindow.on('closed', () => { killWhisper(); miniPanel.stop(); mainWindow = null })
 
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  miniPanel.init({
+    getMain: () => mainWindow,
+    preload: join(__dirname, '../preload/index.js'),
+    rendererUrl: !app.isPackaged ? process.env['ELECTRON_RENDERER_URL'] : null,
+    rendererFile: join(__dirname, '../renderer/index.html'),
+    python: pythonCmd(),
+    pythonDir: pythonDir(),
+  })
 }
 
 app.whenReady().then(() => {
@@ -712,4 +725,5 @@ app.on('before-quit', () => {
   log.info('app', 'Shutting down')
   killWhisper({ graceMs: 500 })
   _resetVpProc()
+  miniPanel.stop()
 })

@@ -46,5 +46,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onAnalyzingDone:       (cb) => ipcRenderer.on('scripture-analyzing-done', (_e, d) => cb(d)),
   onTranslationRequest:  (cb) => ipcRenderer.on('translation-request',  (_e, d) => cb(d)),
 
+  // Mini panel docked to VideoPsalm. The full window publishes its state, the
+  // panel shows it and sends its button presses back.
+  setMiniPanel:     (on) => ipcRenderer.invoke('set-mini-panel', on),
+  publishMiniState: (state) => ipcRenderer.send('mini-state', state),
+  onMiniState:      (cb) => ipcRenderer.on('mini-state', (_e, d) => cb(d)),
+  miniAction:       (action) => ipcRenderer.send('mini-action', action),
+  onMiniAction:     (cb) => ipcRenderer.on('mini-action', (_e, d) => cb(d)),
+
   removeAllListeners: (ch) => ipcRenderer.removeAllListeners(ch),
 })
