@@ -54,7 +54,8 @@ You do not need the full window open. Click **Mini panel** in the top bar once (
 - It shows the top suggestions with their numbers, what is on screen and in which translation, and translation requests.
 - Click a suggestion, or click the panel and press `1` to `9`, to send it. `T` switches Bible, `Ctrl+L` starts or stops listening.
 - Drag it by its title strip to wherever suits your layout; it remembers the spot relative to VideoPsalm and follows VideoPsalm when it moves.
-- It shows only while VideoPsalm (or the panel) is in front, and hides when VideoPsalm is minimised or you switch to another program.
+- It shows over VideoPsalm and over OBS, each with its own remembered spot, and hides over any other program.
+- With the `Ctrl+Alt` keys you can stay in OBS the whole time: send a verse, hide it, blank the screen or switch Bible without switching windows. Fewer window switches also means less lag on the laptop.
 - `_` folds it down to its title strip. **Full** brings back the full window.
 
 The full window can stay minimised behind VideoPsalm the whole service; it does the work for the panel.
@@ -98,6 +99,11 @@ Press **Stop** (`Ctrl+L`). The On screen panel keeps the list of verses used, wh
 |---|---|
 | `1` to `9` | Send that card to VideoPsalm (also in the mini panel) |
 | `T` | Switch VideoPsalm to the translation the preacher asked for |
+| `Ctrl+Alt+1` to `9` | From any program, OBS included: send that card to VideoPsalm |
+| `Ctrl+Alt+0` | From any program: hide or show the verse text on screen |
+| `Ctrl+Alt+B` | From any program: screen off or on |
+| `Ctrl+Alt+T` | From any program: switch to the translation asked for |
+| `Ctrl+Alt+P` | From any program: fold or unfold the mini panel |
 | `Ctrl+F` | Jump to the lookup box |
 | `Ctrl+L` | Start or stop listening |
 | `Ctrl+,` | Open or close settings |
