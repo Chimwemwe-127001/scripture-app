@@ -206,6 +206,62 @@ def set_bible(name):
     return True, None, {'current': short, 'currentName': full}
 
 
+# VideoPsalm's toggle buttons beside the verse list. Its tooltips are in
+# French in some builds, so both languages are matched.
+SCREEN_BUTTONS = {
+    'text':  re.compile(r'afficher le texte|show.*text', re.I),        # verse text on or off
+    'blank': re.compile(r'teindre|turn off|black|blank|screen off', re.I),  # whole screen off
+}
+STATE_PRESSED = 0x8   # MSAA STATE_SYSTEM_PRESSED
+
+
+def screen_button(vp_hwnd, kind):
+    """VideoPsalm's 'show text' or 'screen off' button."""
+    from pywinauto.uia_element_info import UIAElementInfo
+    from pywinauto.controls.uiawrapper import UIAWrapper
+    ctrl = controls(vp_hwnd)
+    if kind not in ctrl:
+        root = _uia.iuia.ElementFromHandle(vp_hwnd)
+        cond = _uia.iuia.CreatePropertyCondition(
+            _uia.UIA_dll.UIA_ControlTypePropertyId, _uia.UIA_dll.UIA_ButtonControlTypeId)
+        found = root.FindAll(_uia.tree_scope['descendants'], cond)
+        for i in range(found.Length):
+            w = UIAWrapper(UIAElementInfo(found.GetElement(i)))
+            if SCREEN_BUTTONS[kind].search(w.element_info.name or ''):
+                ctrl[kind] = w
+                break
+        else:
+            raise LookupError(kind)
+    return ctrl[kind]
+
+
+def is_pressed(button):
+    return bool((button.legacy_properties().get('State') or 0) & STATE_PRESSED)
+
+
+def press_screen_button(kind):
+    """Toggle 'text' or 'blank'; (ok, error, {'kind': ..., 'on': bool})."""
+    if kind not in SCREEN_BUTTONS:
+        return False, f'Unknown button: {kind}', None
+    vp_hwnd = find_vp_hwnd()
+    if not vp_hwnd:
+        return False, 'VideoPsalm is not open', None
+    try:
+        button = screen_button(vp_hwnd, kind)
+    except LookupError:
+        return False, "Could not find that button in VideoPsalm", None
+    before = is_pressed(button)
+    button.invoke()
+    deadline = time.monotonic() + READ_TIMEOUT_S
+    on = before
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+        on = is_pressed(button)
+        if on != before:
+            break
+    return True, None, {'kind': kind, 'on': on}
+
+
 def first_verse(reference):
     m = re.search(r':\s*(\d+)', reference)
     return int(m.group(1)) if m else None
@@ -278,12 +334,14 @@ if __name__ == "__main__":
             action = cmd.get("action")
             if action == "check":
                 print(json.dumps({"running": is_running()}), flush=True)
-            elif action in ("send", "bibles", "set-bible"):
+            elif action in ("send", "bibles", "set-bible", "press"):
                 try:
                     if action == "send":
                         out = result_json(*send_reference(cmd.get("reference", "")))
                     elif action == "bibles":
                         out = result_json(*list_bibles(), key='result')
+                    elif action == "press":
+                        out = result_json(*press_screen_button(cmd.get("button", "")), key='result')
                     else:
                         out = result_json(*set_bible(cmd.get("name", "")), key='result')
                 except Exception as e:

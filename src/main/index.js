@@ -10,6 +10,7 @@ const { VerseSearch, isStrong, forJudge } = require('./verseSearch')
 const { detectTranslations, matchBible } = require('./translationRequest')
 const settings       = require('./settings')
 const miniPanel      = require('./miniPanel')
+const hotkeys        = require('./hotkeys')
 const log            = require('./logger')
 
 let mainWindow = null
@@ -699,6 +700,19 @@ app.whenReady().then(() => {
 
   createWindow()
 
+  hotkeys.register({
+    toRenderer: (action) => mainWindow?.webContents.send('mini-action', action),
+    pressScreenButton: async (button) => {
+      try {
+        const r = await callVpBridge({ action: 'press', button })
+        return r?.ok ? { ok: true, on: r.result.on } : { ok: false, error: r?.error }
+      } catch (err) {
+        return { ok: false, error: err.message }
+      }
+    },
+    toggleMini: () => miniPanel.toggleCollapsed(),
+  })
+
   // Build the verse index after the window is up, so start-up stays quick.
   setTimeout(async () => {
     const t0 = Date.now()
@@ -713,6 +727,8 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
+
+app.on('will-quit', () => hotkeys.unregister())
 
 app.on('window-all-closed', () => {
   killWhisper()

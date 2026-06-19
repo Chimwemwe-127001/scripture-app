@@ -23,6 +23,7 @@ const DEFAULTS = {
   miniPanel: true,           // the small panel docked to VideoPsalm
   miniCollapsed: false,
   miniOffset: { x: 8, y: 165, w: 360, h: 250 },   // from VideoPsalm's top-left corner, in DIPs
+  miniOffsetObs: { x: 8, y: 60, w: 360, h: 250 },  // from OBS's top-left corner, in DIPs
 }
 
 // Only these keys are accepted, so a hand-edited or stale file cannot inject
@@ -72,11 +73,12 @@ function validate(input) {
       case 'miniCollapsed':
         if (typeof value === 'boolean') out[key] = value
         break
-      case 'miniOffset': {
+      case 'miniOffset':
+      case 'miniOffsetObs': {
         const ok = (n, lo, hi) => Number.isFinite(n) && n >= lo && n <= hi
         if (value && ok(value.x, -4000, 8000) && ok(value.y, -4000, 8000) &&
             ok(value.w, 240, 1200) && ok(value.h, 120, 1200)) {
-          out.miniOffset = { x: Math.round(value.x), y: Math.round(value.y), w: Math.round(value.w), h: Math.round(value.h) }
+          out[key] = { x: Math.round(value.x), y: Math.round(value.y), w: Math.round(value.w), h: Math.round(value.h) }
         }
         break
       }

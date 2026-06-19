@@ -1,15 +1,16 @@
 /**
- * miniPanel.js: a small window docked to VideoPsalm, so the operator can work
- * from VideoPsalm alone.
+ * miniPanel.js: a small window docked to VideoPsalm or OBS, so the operator
+ * can work from either without opening the full window.
  *
  * VideoPsalm has no plugin API, so the panel cannot live inside it. Instead it
- * is a frameless, always-on-top window that follows VideoPsalm's window:
+ * is a frameless, always-on-top window that follows the program in front:
  *   - python/vp_window_watch.py reports where VideoPsalm is and which program
  *     is in front;
- *   - the panel keeps its saved offset from VideoPsalm's top-left corner, and
- *     dragging it saves a new offset;
- *   - it shows only while VideoPsalm (or the panel itself) is in front, and
- *     hides when VideoPsalm is minimised or closed.
+ *   - over VideoPsalm or OBS's main window, the panel keeps a saved offset from
+ *     that window's top-left corner (one offset each); dragging it saves a new
+ *     one;
+ *   - over any other program it hides, and it also hides when VideoPsalm is
+ *     closed.
  *
  * The full window stays the single source of truth. Its renderer publishes a
  * small snapshot (suggestions, what is on screen, translation request), the
@@ -28,6 +29,7 @@ const COLLAPSED_H = 40   // just the title strip
 let win = null
 let watch = null
 let vp = null            // last report from the watcher
+let lastHost = null      // where the panel was last docked, kept while it has focus
 let placing = false      // true while we move the panel ourselves
 let dragging = false     // true while the operator drags or resizes it
 let opts = null          // { getMain, preload, rendererUrl, rendererFile, python, pythonDir }
@@ -47,8 +49,7 @@ function init(options) {
       main.focus()
       main.setAlwaysOnTop(false)
     } else if (action?.type === 'collapse') {
-      settings.save({ miniCollapsed: !settings.load().miniCollapsed })
-      place()
+      toggleCollapsed()
     } else {
       main?.webContents.send('mini-action', action)
     }
@@ -135,25 +136,41 @@ function startWatch() {
   })
 }
 
-/** VideoPsalm's window in DIPs, the unit Electron positions windows in. */
-function vpRect() {
-  const [l, t, r, b] = vp.rect
+// Where each host keeps its offset in settings.
+const OFFSET_KEY = { vp: 'miniOffset', obs: 'miniOffsetObs' }
+
+/** A physical-pixel rect [l, t, r, b] in DIPs, the unit Electron positions windows in. */
+function toDip([l, t, r, b]) {
   return screen.screenToDipRect(null, { x: l, y: t, width: r - l, height: b - t })
+}
+
+/** The window the panel should sit on now: { key: 'vp' | 'obs', rect }, or null to hide. */
+function currentHost() {
+  if (!vp?.open) return null
+  const fg = vp.fg || {}
+  if (vp.fgPid === vp.vpPid && !vp.minimized) return { key: 'vp', rect: toDip(vp.rect) }
+  // OBS's main window title starts with "OBS"; its dialogs (Settings...) do not.
+  if (fg.name?.startsWith('obs') && /^OBS/.test(fg.title || '') && !fg.minimized && fg.rect) {
+    return { key: 'obs', rect: toDip(fg.rect) }
+  }
+  if (win?.isFocused()) return lastHost   // the operator is using the panel itself
+  return null
 }
 
 function place() {
   if (!win || win.isDestroyed()) return
-  const inFront = vp && (vp.fgPid === vp.vpPid || win.isFocused())
-  if (!vp?.open || vp.minimized || !inFront) {
+  const host = currentHost()
+  if (!host) {
     if (win.isVisible()) win.hide()
     return
   }
+  lastHost = host
 
-  const r = vpRect()
+  const r = host.rect
   const s = settings.load()
-  const o = s.miniOffset
+  const o = s[OFFSET_KEY[host.key]]
   const h = s.miniCollapsed ? COLLAPSED_H : o.h
-  // Keep the panel inside VideoPsalm's window, wherever that is.
+  // Keep the panel inside its host window, wherever that is.
   const x = Math.min(Math.max(r.x + o.x, r.x), r.x + r.width - o.w)
   const y = Math.min(Math.max(r.y + o.y, r.y), r.y + r.height - h)
   const want = { x: Math.round(x), y: Math.round(y), width: o.w, height: h }
@@ -167,21 +184,28 @@ function place() {
   if (!win.isVisible()) win.showInactive()
 }
 
-/** The operator dragged or resized the panel: remember where, relative to VideoPsalm. */
+/** The operator dragged or resized the panel: remember where, relative to its host. */
 function saveOffset() {
-  if (!dragging || placing || !win || !vp?.open) return
+  if (!dragging || placing || !win || !lastHost) return
   dragging = false
-  const r = vpRect()
+  const key = OFFSET_KEY[lastHost.key]
+  const r = lastHost.rect
   const b = win.getBounds()
   const s = settings.load()
   settings.save({
-    miniOffset: {
+    [key]: {
       x: b.x - r.x,
       y: b.y - r.y,
       w: b.width,
-      h: s.miniCollapsed ? s.miniOffset.h : b.height,
+      h: s.miniCollapsed ? s[key].h : b.height,
     },
   })
 }
 
-module.exports = { init, stop }
+/** Fold the panel to its title strip, or open it again. */
+function toggleCollapsed() {
+  settings.save({ miniCollapsed: !settings.load().miniCollapsed })
+  place()
+}
+
+module.exports = { init, stop, toggleCollapsed }

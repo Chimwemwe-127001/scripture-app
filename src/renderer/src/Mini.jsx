@@ -110,7 +110,7 @@ export default function Mini() {
           <li key={c.id}>
             <button
               onClick={() => act({ type: 'send', number: i + 1 })}
-              title={`Send ${c.reference} to VideoPsalm (${i + 1})`}
+              title={`Send ${c.reference} to VideoPsalm (${i + 1} here, Ctrl+Alt+${i + 1} anywhere)`}
               className={`w-full grid grid-cols-[22px_1fr] gap-x-2 px-2 py-1.5 text-left border-b border-line hover:bg-ink-2
                 ${i === 0 ? 'bg-ink-2/60' : ''}`}
             >
@@ -125,6 +125,10 @@ export default function Mini() {
           </li>
         ))}
       </ol>
+
+      <footer className="px-3 py-1 border-t border-line font-mono text-[10px] text-fg-3 truncate shrink-0">
+        From any window: Ctrl+Alt+1-9 send · 0 text · B blank · T Bible
+      </footer>
     </div>
   )
 }
