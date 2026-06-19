@@ -150,7 +150,7 @@ function currentHost() {
   const fg = vp.fg || {}
   if (vp.fgPid === vp.vpPid && !vp.minimized) return { key: 'vp', rect: toDip(vp.rect) }
   // OBS's main window title starts with "OBS"; its dialogs (Settings...) do not.
-  if (fg.name?.startsWith('obs') && /^OBS/.test(fg.title || '') && !fg.minimized && fg.rect) {
+  if (fg.name?.startsWith('obs') && /^OBS\b/.test(fg.title || '') && !fg.minimized && fg.rect) {
     return { key: 'obs', rect: toDip(fg.rect) }
   }
   if (win?.isFocused()) return lastHost   // the operator is using the panel itself
@@ -164,6 +164,7 @@ function place() {
     if (win.isVisible()) win.hide()
     return
   }
+  if (host.key !== lastHost?.key) log.info('mini', 'Panel docked', { on: host.key === 'obs' ? 'OBS' : 'VideoPsalm' })
   lastHost = host
 
   const r = host.rect
