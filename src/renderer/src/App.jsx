@@ -386,6 +386,10 @@ export default function App() {
     'dismiss-translation': () => setTranslationAsk(null),
     'toggle-listen': () => (isListening ? handleStopListening() : handleStartListening()),
     publish: () => setPublishTick(t => t + 1),
+    notice: ({ text }) => {
+      setNotice(text)
+      setTimeout(() => setNotice(''), 4000)
+    },
   }
 
   useEffect(() => {
