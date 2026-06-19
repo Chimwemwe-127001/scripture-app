@@ -4,10 +4,11 @@ its mini panel docked to it.
 
 Prints one JSON line whenever something changes:
     {"open": true, "minimized": false, "rect": [left, top, right, bottom],
-     "vpPid": 1234, "fgPid": 5678}
-rect is in physical pixels (this process is DPI aware). fgPid is the process
-that owns the foreground window, so the app can hide the panel when the
-operator moves to an unrelated program.
+     "vpPid": 1234, "fgPid": 5678,
+     "fg": {"name": "obs64.exe", "title": "OBS 31.0 - ...", "rect": [...]}}
+Rects are in physical pixels (this process is DPI aware). fg is the program
+in front, so the app can show the panel over VideoPsalm or OBS and hide it
+over anything else.
 
 Usage: python vp_window_watch.py
 """
@@ -15,6 +16,7 @@ import ctypes
 import json
 import sys
 import time
+import psutil
 import win32gui
 import win32process
 
@@ -31,6 +33,7 @@ def main():
         pass
 
     hwnd, last, last_scan = None, None, 0.0
+    names = {}   # pid -> process name, so psutil is asked once per program
     while True:
         now = time.monotonic()
         if (not hwnd or not win32gui.IsWindow(hwnd)) and now - last_scan > RESCAN_S:
@@ -38,6 +41,17 @@ def main():
 
         fg = win32gui.GetForegroundWindow()
         fg_pid = win32process.GetWindowThreadProcessId(fg)[1] if fg else 0
+        if fg_pid and fg_pid not in names:
+            try:
+                names[fg_pid] = psutil.Process(fg_pid).name().lower()
+            except Exception:
+                names[fg_pid] = ''
+        front = {
+            'name': names.get(fg_pid, ''),
+            'title': win32gui.GetWindowText(fg) if fg else '',
+            'rect': list(win32gui.GetWindowRect(fg)) if fg else None,
+            'minimized': bool(fg and win32gui.IsIconic(fg)),
+        }
         if hwnd and win32gui.IsWindow(hwnd):
             state = {
                 'open': True,
@@ -45,10 +59,11 @@ def main():
                 'rect': list(win32gui.GetWindowRect(hwnd)),
                 'vpPid': win32process.GetWindowThreadProcessId(hwnd)[1],
                 'fgPid': fg_pid,
+                'fg': front,
             }
         else:
             hwnd = None
-            state = {'open': False, 'fgPid': fg_pid}
+            state = {'open': False, 'fgPid': fg_pid, 'fg': front}
 
         if state != last:
             print(json.dumps(state), flush=True)
