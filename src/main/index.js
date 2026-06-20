@@ -437,11 +437,29 @@ ipcMain.handle('get-audio-devices', async () => {
 })
 
 /**
+ * The input's number as Windows numbers it now. Plugging in a USB interface
+ * (a GoStream, a Focusrite) renumbers every device, so a number remembered
+ * from earlier can point at a different device, or at an output. The saved
+ * name is the key; the number is looked up again each time.
+ */
+async function currentDeviceIndex(deviceIndex) {
+  const name = settings.load().deviceName
+  const list = await runPythonJson('list_devices.py')
+  if (!Array.isArray(list)) return deviceIndex
+  const byName = name && list.find(d => d.name === name)
+  const index = byName ? byName.index
+    : list.some(d => d.index === deviceIndex) ? deviceIndex : null   // gone: the system default
+  if (index !== deviceIndex) log.info('audio', 'Input renumbered', { name, was: deviceIndex, now: index })
+  return index
+}
+
+/**
  * Test input: run the level meter on one device for a few seconds, streaming
  * its level to the settings panel, so the operator can see a microphone is
  * really getting sound before the service starts.
  */
-ipcMain.handle('test-input', async (_e, deviceIndex = null) => {
+ipcMain.handle('test-input', async (_e, requested = null) => {
+  const deviceIndex = await currentDeviceIndex(requested)
   const args = [join(pythonDir(), 'level_meter.py'), '--seconds', '5']
   if (deviceIndex !== null && deviceIndex !== undefined) args.push('--device-index', String(deviceIndex))
 
@@ -463,8 +481,9 @@ ipcMain.handle('test-input', async (_e, deviceIndex = null) => {
   })
 })
 
-ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex = null } = {}) => {
+ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex: requested = null } = {}) => {
   killWhisper()
+  const deviceIndex = await currentDeviceIndex(requested)
   sentRefs = new Map()
   _transcriptWords = []
   readingContext.reset()
