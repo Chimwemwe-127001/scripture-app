@@ -138,6 +138,21 @@ export default function App() {
     setListeningSince(isListening ? Date.now() : null)
   }, [isListening])
 
+  // Refresh the input list each time Settings opens: plugging in a USB
+  // interface renumbers every device, so the chosen one is followed by name.
+  useEffect(() => {
+    if (!settingsOpen || !api?.getAudioDevices) return
+    api.getAudioDevices().then(list => {
+      if (!Array.isArray(list)) return
+      setDevices(prev => {
+        const chosen = prev.find(d => d.index === deviceIndex)?.name
+        const now = chosen && list.find(d => d.name === chosen)
+        if (now && now.index !== deviceIndex) setDeviceIndex(now.index)
+        return list
+      })
+    })
+  }, [settingsOpen])
+
   // Suggestion cap + TTL expiry (every 60s, drop cards and highlights older than 5 min)
   useEffect(() => {
     const id = setInterval(() => {
