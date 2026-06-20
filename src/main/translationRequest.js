@@ -10,7 +10,8 @@
 // and "New Revised Standard" is not read as "Revised Standard".
 // `cue: true` marks names that are ordinary words too ("the message",
 // "passion", "good news"); they count only when followed by "translation",
-// "version" or "Bible".
+// "version" or "Bible", or when asked for: "read it in the Message", "give
+// me the Good News". Their abbreviations (TPT, GNT, MSG) always count.
 const TRANSLATIONS = [
   { code: 'NKJV', names: ['new king james', 'nkjv'] },
   { code: 'KJV',  names: ['king james', 'authorized version', 'kjv'] },
@@ -24,18 +25,24 @@ const TRANSLATIONS = [
   { code: 'AMPC', names: ['amplified classic', 'classic amplified', 'ampc'] },
   { code: 'AMP',  names: ['amplified'] },
   { code: 'NET',  names: ['new english translation'] },
+  { code: 'CSB',  names: ['christian standard', 'csb'] },
   { code: 'TLB',  names: ['living bible'] },
-  { code: 'GNT',  names: ['good news'], cue: true },
-  { code: 'MSG',  names: ['message'], cue: true },
-  { code: 'TPT',  names: ['passion'], cue: true },
+  { code: 'GNT',  names: ['good news'], cue: true, abbr: ['gnt', 'gnb'] },
+  { code: 'MSG',  names: ['message'], cue: true, abbr: ['msg'] },
+  { code: 'TPT',  names: ['passion'], cue: true, abbr: ['tpt'] },
 ]
 
 const CUE = '(?:translation|version|bible)'
+// An ask: "read it in the", "switch to the", "give me the".
+const ASK = '(?:(?:read(?:ing)?|switch(?:ing)?|go|turn)(?:\\s+(?:it|that|this|us))?\\s+(?:in|from|to)|give\\s+(?:me|us))\\s+the'
 
-const PATTERNS = TRANSLATIONS.map(t => ({
-  code: t.code,
-  re: new RegExp(`\\b(?:${t.names.join('|')})\\b${t.cue ? `\\s+${CUE}\\b` : ''}`, 'g'),
-}))
+const PATTERNS = TRANSLATIONS.map(t => {
+  const names = t.names.join('|')
+  const forms = t.cue
+    ? [`\\b(?:${names})\\s+${CUE}\\b`, `\\b${ASK}\\s+(?:${names})\\b`, ...(t.abbr || []).map(a => `\\b${a}\\b`)]
+    : [`\\b(?:${names})\\b`]
+  return { code: t.code, re: new RegExp(forms.join('|'), 'g') }
+})
 
 /**
  * Speech to plain lower case. Whisper writes "N.I.V." or "N I V" as often as
