@@ -322,7 +322,10 @@ export default function App() {
       setSuggestions(prev => {
         // A specific verse replaces the "verse 1" guess shown when only its
         // chapter had been named, e.g. Hebrews 6:10 replaces Hebrews 6:1.
-        return [{ ...card, addedAt }, ...prev.filter(s => !replacesGuess(s))].slice(0, SUGGESTION_MAX)
+        // A verse named again moves its card back to the top rather than
+        // showing it twice.
+        const kept = prev.filter(s => !replacesGuess(s) && s.reference !== card.reference)
+        return [{ ...card, addedAt }, ...kept].slice(0, SUGGESTION_MAX)
       })
     })
     api.onTranslationRequest?.((ask) => setTranslationAsk(ask))
