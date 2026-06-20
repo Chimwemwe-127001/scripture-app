@@ -180,6 +180,12 @@ check('two in order',         asked('the Amplified, then the New Living Translat
 check('"the message" alone is not a request', asked('the message of the cross is simple'), [])
 check('The Message translation', asked('in the Message translation it says'), ['MSG'])
 check('ordinary talk',        asked('God loves you and has a plan for your life'), [])
+check('TPT abbreviation',     asked('Let us read it in the T.P.T.'), ['TPT'])
+check('GNT abbreviation',     asked('read it in GNT'), ['GNT'])
+check('asked for the Good News', asked('give me the Good News'), ['GNT'])
+check('"the good news" in a sermon', asked('the good news of Jesus is simple'), [])
+check('asked for the Message', asked('read it in the Message'), ['MSG'])
+check('"read the message" is not a request', asked('we read the message he sent'), [])
 const VP = ['AMP', 'AMPC', 'GNT', 'KJV', 'MSG-Alt', 'NIV84', 'NKJV', 'NLT', 'TPT']
 check('NIV is NIV84',         matchBible('NIV', VP), 'NIV84')
 check('AMP exact over AMPC',  matchBible('AMP', VP), 'AMP')
