@@ -711,7 +711,22 @@ function createWindow() {
   })
 }
 
+// One copy at a time. A second copy would find the microphone and the
+// Ctrl+Alt hotkeys already taken and fail without saying so; opening the app
+// again brings the running window forward instead.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  })
+}
+
 app.whenReady().then(() => {
+  if (!app.hasSingleInstanceLock()) return
   const saved = settings.load()
   // Restore the saved LM Studio endpoint before the renderer asks for status,
   // so a custom endpoint shows as connected on first paint.
