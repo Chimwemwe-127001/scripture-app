@@ -24,12 +24,15 @@ let whisperProcess = null
  * can appear again, because preachers often return to a key text later on.
  */
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000
+// A verse named out loud again ("John 3:16") is wanted again: the preacher has
+// come back to it. Only a repeat inside the same breath is dropped.
+const NAMED_REPEAT_MS = 30 * 1000
 let sentRefs = new Map()   // reference -> timestamp last suggested
 
-function shouldSuggest(reference) {
+function shouldSuggest(reference, windowMs = DEDUPE_WINDOW_MS) {
   const now = Date.now()
   const last = sentRefs.get(reference)
-  if (last !== undefined && now - last < DEDUPE_WINDOW_MS) return false
+  if (last !== undefined && now - last < windowMs) return false
   sentRefs.set(reference, now)
   return true
 }
@@ -327,7 +330,8 @@ function asRef(c) {
 
 /** Look a reference up and send it as a card, unless it was suggested recently. */
 async function suggestNow(ref, why, details = {}) {
-  if (!ref.reference || !shouldSuggest(ref.reference)) return
+  const named = ref.trigger === 'explicit' || ref.trigger === 'context'
+  if (!ref.reference || !shouldSuggest(ref.reference, named ? NAMED_REPEAT_MS : DEDUPE_WINDOW_MS)) return
   const card = await bibleDb.lookupVerse(ref)
   if (!card) {
     // Not found. Release the dedupe slot so a later, cleaner mention of the
