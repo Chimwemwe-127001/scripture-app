@@ -86,10 +86,39 @@ def _find(root, prop, value, button=False):
     return UIAWrapper(UIAElementInfo(element))
 
 
+def click(button):
+    """Press a VideoPsalm button without bringing VideoPsalm to the front.
+
+    UI Automation's Invoke presses the button but also activates VideoPsalm,
+    which pulls the operator out of OBS. A click posted to the window under
+    the button is handled the same way and leaves the foreground alone, like
+    the keystrokes in post_reference.
+    """
+    r = button.element_info.rectangle
+    sx, sy = (r.left + r.right) // 2, (r.top + r.bottom) // 2
+    hwnd = find_vp_hwnd()
+    while True:   # the innermost window under the button
+        child = win32gui.ChildWindowFromPointEx(hwnd, win32gui.ScreenToClient(hwnd, (sx, sy)), 0x0001 | 0x0004)
+        if not child or child == hwnd:
+            break
+        hwnd = child
+    pos = win32api.MAKELONG(*win32gui.ScreenToClient(hwnd, (sx, sy)))
+    win32api.PostMessage(hwnd, win32con.WM_MOUSEMOVE, 0, pos)
+    win32api.PostMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, pos)
+    win32api.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, pos)
+
+
 def open_bibles_tab(ctrl):
-    """Switch VideoPsalm to its Bibles tab (UIA Invoke, no focus needed)."""
-    ctrl['tab'].invoke()
-    time.sleep(0.3)
+    """Switch VideoPsalm to its Bibles tab, without bringing it to the front.
+
+    The posted click is handled a moment later, so wait until the reference
+    box is really showing: keystrokes sent before that are lost.
+    """
+    click(ctrl['tab'])
+    deadline = time.monotonic() + 1.5
+    while time.monotonic() < deadline and not win32gui.IsWindowVisible(ctrl['box'].handle):
+        time.sleep(0.05)
+    time.sleep(0.15)   # let the box finish appearing before it is typed into
 
 
 def controls(vp_hwnd):
@@ -195,7 +224,7 @@ def set_bible(name):
     button = bible_buttons(ctrl).get(name)
     if not button:
         return False, f"{name} is not one of VideoPsalm's Bibles", None
-    button.invoke()
+    click(button)
     deadline = time.monotonic() + READ_TIMEOUT_S
     while time.monotonic() < deadline:
         time.sleep(0.05)
@@ -251,7 +280,7 @@ def press_screen_button(kind):
     except LookupError:
         return False, "Could not find that button in VideoPsalm", None
     before = is_pressed(button)
-    button.invoke()
+    click(button)
     deadline = time.monotonic() + READ_TIMEOUT_S
     on = before
     while time.monotonic() < deadline:
@@ -282,21 +311,35 @@ def send_reference(reference):
     edits = ctrl['box'].children()
     edit_hwnd = edits[0].handle if edits else ctrl['box'].handle
     before = read_shown(ctrl)
-    post_reference(edit_hwnd, reference)
-
-    # Wait until the list changes to the verse we asked for.
     want = first_verse(reference)
-    deadline = time.monotonic() + READ_TIMEOUT_S
-    shown = []
-    while time.monotonic() < deadline:
-        time.sleep(0.05)
-        shown = read_shown(ctrl)
-        if shown and shown != before and (want is None or shown[0]['verse'] == want):
+
+    # Type it, then wait until the list changes to the verse we asked for. If
+    # VideoPsalm missed the keystrokes (it was still busy), type it once more.
+    for _ in range(2):
+        post_reference(edit_hwnd, reference)
+        shown, landed = wait_for_verse(ctrl, want, before)
+        if landed:
             break
     name, short = translation_of(ctrl)
     if not shown:
         return False, 'VideoPsalm did not show a verse. Check the reference in VideoPsalm.', None
     return True, None, {'verses': shown, 'translation': short, 'translationName': name}
+
+
+def wait_for_verse(ctrl, want, before):
+    """Poll VideoPsalm's list; (shown, True) once it shows the verse asked for."""
+    start = time.monotonic()
+    shown = []
+    while time.monotonic() - start < READ_TIMEOUT_S:
+        time.sleep(0.05)
+        shown = read_shown(ctrl)
+        right = shown and (want is None or shown[0]['verse'] == want)
+        # A changed list is the new verse. An unchanged one that already shows
+        # the verse asked for is a resend of what is on screen: accept it after
+        # a moment rather than waiting for a change that will not come.
+        if right and (shown != before or time.monotonic() - start > 0.3):
+            return shown, True
+    return shown, False
 
 
 def result_json(ok, error, shown, key='shown'):
