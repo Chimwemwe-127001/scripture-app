@@ -115,6 +115,9 @@ def open_bibles_tab(ctrl):
     box is really showing: keystrokes sent before that are lost.
     """
     click(ctrl['tab'])
+    if 'box' not in ctrl:   # first look-up: the box is found after the tab opens
+        time.sleep(0.6)
+        return
     deadline = time.monotonic() + 1.5
     while time.monotonic() < deadline and not win32gui.IsWindowVisible(ctrl['box'].handle):
         time.sleep(0.05)
@@ -296,6 +299,99 @@ def first_verse(reference):
     return int(m.group(1)) if m else None
 
 
+# Each Bible in VideoPsalm spells some book names its own way: NKJV lists
+# "I Samuel", AMP "1 Samuel"; some say "Song of Songs". VideoPsalm only finds
+# a book typed the way that Bible spells it, and guesses otherwise ("1 Samuel"
+# in NKJV opens the Song of Songs). So the names are read from VideoPsalm's
+# book list for the selected Bible and the reference is typed to match.
+BOOK_LIST = 'listBoxControlBibleBooks'
+ROMAN = {'1': 'I', '2': 'II', '3': 'III'}
+ORDINAL = {'1': 'First', '2': 'Second', '3': 'Third'}
+SAME_BOOK = [
+    {'song of solomon', 'song of songs', 'canticles', 'song of sol'},
+    {'psalms', 'psalm'},
+    {'revelation', 'revelations', 'revelation of john'},
+]
+_book_names = {}   # Bible (e.g. 'NKJV') -> (book names as it lists them, whole list?)
+
+
+def book_names(ctrl, bible):
+    """(names, complete): the books VideoPsalm lists for this Bible.
+
+    Only the books in view are exposed, so `complete` is False when the list
+    scrolls. Right after a Bible switch the list may still be empty; it is read
+    again until it fills, and an empty read is never remembered.
+    """
+    if bible in _book_names:
+        return _book_names[bible]
+    if 'books' not in ctrl:
+        root = _uia.iuia.ElementFromHandle(find_vp_hwnd())
+        ctrl['books'] = _find(root, _uia.UIA_dll.UIA_AutomationIdPropertyId, BOOK_LIST)
+    def in_view():
+        children = ctrl['books'].children()
+        names = [c.element_info.name for c in children if c.element_info.control_type == 'ListItem']
+        bar = next((c for c in children if c.element_info.control_type == 'ScrollBar'), None)
+        return names, bar
+
+    deadline = time.monotonic() + 1.5
+    names, bar = in_view()
+    while not names and time.monotonic() < deadline:
+        time.sleep(0.1)
+        names, bar = in_view()
+    if not names:
+        return [], False
+
+    # The list shows a page of books at a time. Page to the start, then to the
+    # end, with its own Page Left / Page Right buttons (clicked the focus-safe
+    # way), collecting every book. Done once per Bible.
+    complete = bar is None
+    if bar is not None:
+        seen = list(names)
+        parts = {p.element_info.name: p for p in bar.children()}
+        for button, steps in (('Page Left', 6), ('Page Right', 10), ('Page Left', 10)):
+            part = parts.get(button)
+            for _ in range(steps):
+                if part is None or part.element_info.rectangle.width() <= 0:
+                    break   # that end of the list is reached
+                click(part)
+                time.sleep(0.25)
+                seen += [n for n in in_view()[0] if n not in seen]
+        complete = len(seen) >= 66 or (parts.get('Page Right') is not None and
+                                       parts['Page Right'].element_info.rectangle.width() <= 0)
+        names = seen
+    _book_names[bible] = (names, complete)
+    return names, complete
+
+
+def as_videopsalm_spells(reference, names, complete=False):
+    """'1 Samuel 17:45' -> 'I Samuel 17:45' when this Bible lists 'I Samuel'.
+
+    The list shows only the books that fit on screen, so a book out of view
+    takes the style of those in view (Roman numerals or digits). Returns None
+    when the whole list is in view and the book is not in it: some Bibles
+    (TPT) do not include every book.
+    """
+    m = re.match(r'^\s*(?:([1-3])\s+)?([A-Za-z][A-Za-z ]*?)\s+(\d.*)$', reference)
+    if not m or not names:
+        return reference
+    number, book, rest = m.groups()
+    listed = {n.lower(): n for n in names}
+    if number:
+        forms = [f'{number} {book}', f'{ROMAN[number]} {book}', f'{ORDINAL[number]} {book}']
+        for form in forms:
+            if form.lower() in listed:
+                return f'{listed[form.lower()]} {rest}'
+        if complete:
+            return None
+        roman = any(re.match(r'^I{1,3} ', n) for n in names)
+        return f'{ROMAN[number] if roman else number} {book} {rest}'
+    group = next((g for g in SAME_BOOK if book.lower() in g), {book.lower()})
+    for name in group:
+        if name in listed:
+            return f'{listed[name]} {rest}'
+    return None if complete else reference
+
+
 def send_reference(reference):
     """Send the reference; return (ok, error, shown)."""
     vp_hwnd = find_vp_hwnd()
@@ -315,8 +411,13 @@ def send_reference(reference):
 
     # Type it, then wait until the list changes to the verse we asked for. If
     # VideoPsalm missed the keystrokes (it was still busy), type it once more.
+    bible = translation_of(ctrl)[1]
+    typed = as_videopsalm_spells(reference, *book_names(ctrl, bible))
+    if typed is None:
+        book = re.sub(r'\s+\d[\d:\-, ]*$', '', reference)
+        return False, f'{bible} does not include {book}. Switch VideoPsalm to another Bible.', None
     for _ in range(2):
-        post_reference(edit_hwnd, reference)
+        post_reference(edit_hwnd, typed)
         shown, landed = wait_for_verse(ctrl, want, before)
         if landed:
             break
@@ -357,10 +458,12 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if len(sys.argv) >= 2 and sys.argv[1] == "--daemon":
-        # Look VideoPsalm's controls up now, so the first send is not slow.
+        # Look VideoPsalm's controls and the current Bible's book names up now,
+        # so the first send of the service is not the slow one.
         try:
             if find_vp_hwnd():
-                controls(find_vp_hwnd())
+                warm = controls(find_vp_hwnd())
+                book_names(warm, translation_of(warm)[1])
         except Exception:
             pass
         # Persistent daemon: read JSON commands from stdin, write results to stdout.
