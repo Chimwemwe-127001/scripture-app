@@ -10,6 +10,7 @@
  */
 
 const bookNames = require('./bookNames')
+const { wordsToDigits } = require('./numberWords')
 
 // ---------------------------------------------------------------------------
 // Pattern, built once at module load.
@@ -59,6 +60,8 @@ const STRONG_SEPARATOR = /^(?::|verses?|vv?\.?)$/i
  */
 function extract(text) {
   if (!text) return []
+  // "Isaiah sixty three verse ten" reads as "Isaiah 63 verse 10".
+  text = wordsToDigits(text)
 
   const results = []
   const seen = new Set()
