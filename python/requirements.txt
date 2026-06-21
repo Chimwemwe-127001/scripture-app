@@ -13,3 +13,7 @@ nvidia-cudnn-cu12 ; sys_platform == 'win32' or sys_platform == 'linux'
 pywin32 ; sys_platform == 'win32'
 pywinauto ; sys_platform == 'win32'
 psutil ; sys_platform == 'win32'
+
+# Optional, for comparing NVIDIA Parakeet with Whisper (scripts/eval_asr.py,
+# system "parakeet-tdt-0.6b-v2"). Not needed to run the app.
+# pip install onnx-asr[hub]

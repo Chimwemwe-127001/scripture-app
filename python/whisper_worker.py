@@ -94,9 +94,53 @@ def add_nvidia_dll_dirs():
             os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
 
 
+class ParakeetEngine:
+    """NVIDIA Parakeet TDT 0.6B v2 through onnx-asr (ONNX Runtime), int8.
+
+    A different model family from Whisper: a transducer trained on English
+    speech. Kept for comparison only (scripts/eval_asr.py). On our sermon
+    recording it made more errors than distil-large-v3.5 (5.0% against 4.2%
+    WER) and took 2.6 times as long per line with the int8 model, so it is
+    not offered in Settings. Needs: pip install onnx-asr[hub].
+    """
+    REPO = "nemo-parakeet-tdt-0.6b-v2"
+
+    def __init__(self, device):
+        import onnxruntime as ort
+        import onnx_asr
+        try:
+            ort.preload_dlls()   # CUDA and cuDNN from the nvidia-* pip packages
+        except Exception:
+            pass
+        providers = (["CUDAExecutionProvider", "CPUExecutionProvider"] if device == "cuda"
+                     else ["CPUExecutionProvider"])
+        self.model = onnx_asr.load_model(self.REPO, quantization="int8", providers=providers)
+        self.device = device
+
+    def text(self, audio):
+        return self.model.recognize(audio, sample_rate=SAMPLE_RATE).strip()
+
+
+def load_parakeet(device):
+    """Parakeet on the GPU, or on the CPU if the GPU is unavailable."""
+    add_nvidia_dll_dirs()
+    import ctranslate2
+    if device == "auto":
+        device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+    for dev in ([device, "cpu"] if device == "cuda" else ["cpu"]):
+        try:
+            return ParakeetEngine(dev), "parakeet-tdt-0.6b-v2", dev, "int8"
+        except Exception as exc:
+            if dev == "cpu":
+                raise
+            emit({"type": "warning", "message": f"GPU unavailable ({exc}). Falling back to the CPU."})
+
+
 def load_model(name, device):
-    """Load a faster-whisper model, falling back from GPU to CPU if needed.
-    Returns (model, model_name, device, compute_type)."""
+    """Load a faster-whisper model (or Parakeet), falling back from GPU to CPU
+    if needed. Returns (model, model_name, device, compute_type)."""
+    if name.startswith("parakeet"):
+        return load_parakeet(device)
     add_nvidia_dll_dirs()
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")   # harmless on Windows
     # Newer GPUs compile some kernels on first use. A bigger driver cache keeps
@@ -129,6 +173,9 @@ def warm_up(model):
     """Decode one second of quiet noise so any one-time GPU kernel compilation
     happens now, during "Loading model", and not on the first verse."""
     noise = (np.random.default_rng(0).standard_normal(SAMPLE_RATE) * 1e-3).astype(np.float32)
+    if isinstance(model, ParakeetEngine):
+        model.text(noise)
+        return
     segments, _ = model.transcribe(noise, language="en", beam_size=1, vad_filter=False,
                                    without_timestamps=True)
     list(segments)
@@ -239,6 +286,9 @@ class Segmenter:
 
 def transcribe(model, audio, beam_size):
     """Transcribe one utterance. Returns the confident text only."""
+    if isinstance(model, ParakeetEngine):
+        text = " ".join(model.text(audio).split())
+        return "" if text.lower().strip(" .!?,") in KNOWN_HALLUCINATIONS else text
     segments, _ = model.transcribe(
         audio,
         language="en",
