@@ -58,6 +58,13 @@ check('all 66 books',       bookNames.CANONICAL.size, 66)
 group('Extraction: references')
 // ---------------------------------------------------------------------------
 const refs = (s) => extractor.extract(s).map(r => r.reference)
+
+// Spoken numbers, as Parakeet (and sometimes Whisper) writes them.
+check('number words',         refs('What about Isaiah sixty three verse ten?'), ['Isaiah 63:10'])
+check('three sixteen',        refs('John three sixteen'), ['John 3:16'])
+check('hundreds',             refs('Psalm one hundred and nineteen verse one hundred and five'), ['Psalms 119:105'])
+check('twenty-eight',         refs('Romans eight twenty-eight'), ['Romans 8:28'])
+check('"one" without a book', refs('Jesus said to one of them'), [])
 const confs = (s) => extractor.extract(s).map(r => `${r.reference}[${r.confidence}]`)
 
 check('explicit colon',     refs('turn with me to John 3:16'), ['John 3:16'])
