@@ -131,8 +131,15 @@ def hallucination_clips(folder):
 # ---------------------------------------------------------------------------
 
 def run_worker(model, path, start=0.0, end=None):
-    """The current worker in file mode. Returns (lines, decode_ms list, wall seconds)."""
+    """The current worker in file mode. Returns (lines, decode_ms list, wall seconds).
+
+    "<model>:<hints>" chooses how Bible book names are favoured: hotwords,
+    prompt or off (see --hints in the worker), for comparison.
+    """
+    model, _, hints = model.partition(":")
     cmd = [sys.executable, WORKER, "--input-file", path, "--model", model, "--start", str(start)]
+    if hints:
+        cmd += ["--hints", hints]
     if end:
         cmd += ["--end", str(end)]
     t0 = time.perf_counter()
@@ -255,7 +262,7 @@ def main():
         })
         if args.save:
             os.makedirs(args.save, exist_ok=True)
-            with open(os.path.join(args.save, f"{system}.txt"), "w", encoding="utf-8") as f:
+            with open(os.path.join(args.save, system.replace(":", "_") + ".txt"), "w", encoding="utf-8") as f:
                 f.write("\n".join(r["lines"]) + "\n")
 
     print(f"\nExcerpt: {secs / 60:.1f} min, {len(normalise(reference))} reference words, {len(gold)} cited verses\n")

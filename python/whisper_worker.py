@@ -47,6 +47,22 @@ PRE_ROLL_SECS = 0.3         # audio kept from just before speech starts
 # long word list that the model can echo back on silence.
 PROMPT = "A church sermon with Bible readings, such as John 3:16 and Romans 8:28."
 
+# Bible book names Whisper could be told to favour, as faster-whisper
+# "hotwords" or inside the prompt. Measured on our sermon recording, both made
+# things worse: hotwords cut lines short (about half the words lost) and the
+# longer prompt dropped more words than none. So they are off by default and
+# kept only for testing (--hints, scripts/eval_asr.py "<model>:<hints>").
+HINTS = (
+    "chapter verse Genesis Exodus Leviticus Numbers Deuteronomy Joshua Judges Ruth Samuel "
+    "Kings Chronicles Ezra Nehemiah Esther Job Psalm Proverbs Ecclesiastes Song of Solomon "
+    "Isaiah Jeremiah Lamentations Ezekiel Daniel Hosea Joel Amos Obadiah Jonah Micah Nahum "
+    "Habakkuk Zephaniah Haggai Zechariah Malachi Matthew Mark Luke John Acts Romans "
+    "Corinthians Galatians Ephesians Philippians Colossians Thessalonians Timothy Titus "
+    "Philemon Hebrews James Peter Jude Revelation"
+)
+PROMPT_WITH_BOOKS = PROMPT + " Books: " + HINTS.replace("chapter verse ", "") + "."
+HINT_MODE = "off"   # "off", "hotwords" or "prompt"
+
 # Whole-utterance phrases Whisper is known to invent from noise. Only an exact
 # match of the entire utterance is dropped, so a real "thank you" survives.
 KNOWN_HALLUCINATIONS = {
@@ -229,7 +245,8 @@ def transcribe(model, audio, beam_size):
         beam_size=beam_size,
         vad_filter=False,                  # already segmented by our own VAD
         condition_on_previous_text=False,  # one bad line cannot seed the next
-        initial_prompt=PROMPT,
+        initial_prompt=PROMPT_WITH_BOOKS if HINT_MODE == "prompt" else PROMPT,
+        hotwords=HINTS if HINT_MODE == "hotwords" else None,
         without_timestamps=True,
         no_speech_threshold=0.6,
         log_prob_threshold=-1.0,
@@ -322,6 +339,8 @@ def main():
     p.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
     p.add_argument("--device-index", type=int, default=None, help="sounddevice input index")
     p.add_argument("--beam-size", type=int, default=5)
+    p.add_argument("--hints", default="off", choices=["off", "hotwords", "prompt"],
+                   help="favour Bible book names (testing only: both forms measured worse)")
     p.add_argument("--min-silence", type=float, default=0.5, help="pause that ends an utterance (s)")
     p.add_argument("--soft-max", type=float, default=8.0, help="cut a long utterance at the next dip (s)")
     p.add_argument("--hard-max", type=float, default=12.0, help="always cut an utterance here (s)")
@@ -331,6 +350,8 @@ def main():
     p.add_argument("--start", type=float, default=0.0, help="with --input-file: start offset (s)")
     p.add_argument("--end", type=float, default=None, help="with --input-file: end offset (s)")
     args = p.parse_args()
+    global HINT_MODE
+    HINT_MODE = args.hints
 
     emit({"type": "status", "message": "Loading speech model. The first run downloads it (about 1.5 GB).",
           "ready": False, "listening": False})
