@@ -97,6 +97,70 @@ const INPUT = `h-8 px-2 rounded-md bg-ink-2 border border-line text-fg
  * SettingsPanel: the choices made before a service, kept out of the main
  * view so the console only shows what matters while someone is preaching.
  */
+/**
+ * Where verses go: this laptop's VideoPsalm, the projection laptop's (through
+ * its receiver, python/vp_receiver.py), or both. Saved as soon as it changes.
+ */
+function VideoPsalmTargets() {
+  const api = window.electronAPI
+  const [s, setS] = useState(null)
+  const [address, setAddress] = useState('')
+  const [key, setKey] = useState('')
+  const [status, setStatus] = useState('')
+
+  useEffect(() => {
+    api?.getSettings?.().then(saved => {
+      setS(saved)
+      setAddress(saved?.projectionAddress || '')
+      setKey(saved?.projectionKey || '')
+    })
+  }, [])
+
+  const save = async (patch) => setS(await api.saveSettings(patch))
+
+  const test = async (e) => {
+    e.preventDefault()
+    await save({ projectionAddress: address.trim(), projectionKey: key.trim() })
+    setStatus('Checking…')
+    const r = await api.checkVideoPsalm()
+    setStatus(r?.projection === true ? 'Connected. VideoPsalm is open on the projection laptop.'
+      : r?.projection === false ? 'No answer. Is the receiver running there, with VideoPsalm open?'
+      : 'Enter the address to connect.')
+  }
+
+  if (!s) return null
+  const box = 'w-4 h-4 accent-[var(--color-accent)]'
+  return (
+    <>
+      <label className="flex items-center gap-2 text-fg-2">
+        <input type="checkbox" className={box} checked={s.sendToLocal}
+          onChange={e => save({ sendToLocal: e.target.checked })} />
+        This laptop's VideoPsalm (stream)
+      </label>
+      <label className="flex items-center gap-2 text-fg-2">
+        <input type="checkbox" className={box} checked={s.sendToProjection}
+          onChange={e => save({ sendToProjection: e.target.checked })} />
+        Projection laptop's VideoPsalm
+      </label>
+      <form onSubmit={test} className="space-y-2">
+        <Field label="Projection laptop address" hint="Shown in the receiver's window, e.g. 192.168.1.128:8765.">
+          <input value={address} onChange={e => setAddress(e.target.value)} spellCheck={false}
+            placeholder="192.168.1.128:8765" className={`${INPUT} font-mono text-[12px]`} />
+        </Field>
+        <Field label="Receiver key" hint={status || "Also shown in the receiver's window."}>
+          <div className="flex gap-2">
+            <input value={key} onChange={e => setKey(e.target.value)} spellCheck={false}
+              className={`${INPUT} flex-1 font-mono text-[12px]`} />
+            <button type="submit" className="h-8 px-3 rounded-md border border-line-strong text-fg hover:bg-ink-3">
+              Save and test
+            </button>
+          </div>
+        </Field>
+      </form>
+    </>
+  )
+}
+
 export default function SettingsPanel({
   onClose, locked,
   devices, deviceIndex, onDeviceChange,
@@ -200,6 +264,10 @@ export default function SettingsPanel({
             </button>
           </form>
         </Field>
+      </Section>
+
+      <Section title="VideoPsalm">
+        <VideoPsalmTargets />
       </Section>
 
       <Section title="Bible">

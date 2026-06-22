@@ -20,6 +20,10 @@ const DEFAULTS = {
   deviceName:   null,   // the device the index pointed to, since Windows renumbers devices
   llmEndpoint:  'http://127.0.0.1:1234/v1',
   confidenceFilter: 'all',   // 'all' | 'medium' | 'high'
+  sendToLocal: true,         // send verses to this laptop's VideoPsalm
+  sendToProjection: true,    // ...and to the projection laptop's, when its address is set
+  projectionAddress: '',     // e.g. 192.168.1.128:8765 (python/vp_receiver.py)
+  projectionKey: '',         // the key the receiver shows
   miniPanel: true,           // the small panel docked to VideoPsalm
   miniCollapsed: false,
   miniOffset: { x: 8, y: 165, w: 360, h: 250 },   // from VideoPsalm's top-left corner, in DIPs
@@ -69,6 +73,15 @@ function validate(input) {
       case 'confidenceFilter':
         if (VALID_FILTERS.has(value)) out.confidenceFilter = value
         break
+      case 'projectionAddress':
+        // host or host:port only, never a path or scheme
+        if (typeof value === 'string' && /^[\w.-]*(:\d{2,5})?$/.test(value.trim())) out[key] = value.trim()
+        break
+      case 'projectionKey':
+        if (typeof value === 'string' && /^[0-9a-f]{0,64}$/i.test(value.trim())) out[key] = value.trim()
+        break
+      case 'sendToLocal':
+      case 'sendToProjection':
       case 'miniPanel':
       case 'miniCollapsed':
         if (typeof value === 'boolean') out[key] = value

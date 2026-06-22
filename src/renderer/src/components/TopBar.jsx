@@ -78,7 +78,7 @@ function ListenButton({ isListening, isStarting, onToggle }) {
  */
 export default function TopBar({
   isListening, isStarting, listeningSince, statusMsg,
-  whisperModel, engine, llmStatus, vpStatus, bibleDbReady,
+  whisperModel, engine, llmStatus, vpStatus, projStatus, bibleDbReady,
   onToggleListen, settingsOpen, onToggleSettings, miniOn, onToggleMini,
 }) {
   // While listening, show what the worker really loaded and where it runs.
@@ -126,6 +126,13 @@ export default function TopBar({
           state={vpStatus ? 'ok' : 'off'}
           title={vpStatus ? 'VideoPsalm is running' : 'VideoPsalm not detected'}
         />
+        {projStatus !== null && (
+          <StatusChip
+            label="Projector"
+            state={projStatus ? 'ok' : 'off'}
+            title={projStatus ? 'Projection laptop: VideoPsalm is open' : 'Projection laptop not answering'}
+          />
+        )}
         <StatusChip
           label="KJV"
           state={bibleDbReady ? 'ok' : 'err'}
