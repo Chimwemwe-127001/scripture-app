@@ -28,6 +28,10 @@ const PICK_INSTRUCTIONS =
   'If he only shares a few words with a verse, or he is greeting, praying, giving instructions or talking generally about God, answer 0. ' +
   'Most sentences in a sermon are not quotations, so 0 is the usual answer.\n\n'
 
+// A judge question normally takes 0.3 s here and about 1.2 s on a slower
+// second laptop; a model being reloaded can take several seconds more.
+const JUDGE_TIMEOUT_MS = 7000
+
 // The judge's second question needs the model to be this sure of "yes".
 const CONFIRM_MIN_PROB = 0.9
 
@@ -245,6 +249,16 @@ class LlmClient {
   }
 
   /**
+   * Keep the model loaded. LM Studio can unload a model that sits idle, and
+   * the next question then waits for a reload and times out. A one-token
+   * request while listening keeps it warm. Errors are only logged.
+   */
+  async keepWarm() {
+    const answer = await this._ask('Reply with OK.')
+    if (!answer) log.warn('llm', 'Keep-warm got no answer. Is the model loaded in LM Studio?')
+  }
+
+  /**
    * One short question to the model. Returns the reply and the probability of
    * each candidate first token, or null when LM Studio is unavailable.
    * @returns {Promise<{text:string, probs:Object<string,number>}|null>}
@@ -265,7 +279,7 @@ class LlmClient {
           top_logprobs: 5,
           stream: false,
         }),
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(JUDGE_TIMEOUT_MS),
       })
       if (!res.ok) {
         if (res.status === 400) this._modelId = null   // model switched in LM Studio

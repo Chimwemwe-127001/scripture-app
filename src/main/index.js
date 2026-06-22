@@ -8,6 +8,7 @@ const bibleExtractor = require('./bibleExtractor')
 const { ReadingContext } = require('./readingContext')
 const { VerseSearch, isStrong, forJudge } = require('./verseSearch')
 const { detectTranslations, matchBible } = require('./translationRequest')
+const { wordsToDigits } = require('./numberWords')
 const settings       = require('./settings')
 const miniPanel      = require('./miniPanel')
 const hotkeys        = require('./hotkeys')
@@ -62,6 +63,11 @@ let _previousLine = ''   // quotes often run across two transcript lines
 // what is being said now matters more than one for ten seconds ago.
 let _judgeBusy = false
 let _judgeNext = null
+let _chunkLlmBusy = false   // the slower 5 s allusion scan, which yields to the judge
+let _lastLlmAt = 0          // for keeping the model loaded between questions
+
+// References already seen in the sentence still being spoken (see processPartial).
+let _partialRefs = new Set()
 
 // ---------------------------------------------------------------------------
 // Python helpers
@@ -287,6 +293,28 @@ async function processInstantRefs(text) {
   _previousLine = text
 }
 
+/**
+ * A sentence can run 8 to 12 s before its final line arrives, and a reference
+ * near its start would wait all that time. Partials come about once a second,
+ * so a full reference ("John 3:16", with a verse) is shown as soon as two
+ * partials in a row agree on it and the preacher has said more after it. A
+ * half-heard "John 3" (perhaps becoming "John 3:16") never qualifies. The
+ * final line then finds it already shown.
+ */
+function processPartial(text) {
+  if (!text) return
+  const spoken = wordsToDigits(text)
+  const now = new Set()
+  for (const ref of bibleExtractor.extract(spoken)) {
+    if (ref.verse_start == null || ref.isChapterOnly) continue
+    const at = spoken.lastIndexOf(ref.heard)
+    if (at < 0 || !/[A-Za-z]/.test(spoken.slice(at + ref.heard.length))) continue   // still being said
+    now.add(ref.reference)
+    if (_partialRefs.has(ref.reference)) suggestNow(ref, 'Instant regex hit while speaking')
+  }
+  _partialRefs = now
+}
+
 function judgeLater(line, options) {
   _judgeNext = { line, options, heardAt: Date.now() }
   if (!_judgeBusy) runJudge()
@@ -298,6 +326,7 @@ async function runJudge() {
     while (_judgeNext) {
       const { line, options, heardAt } = _judgeNext
       _judgeNext = null
+      _lastLlmAt = Date.now()
       const pick = await llmClient.pickVerse(line, options)
       if (pick) {
         await suggestNow({ ...asRef(pick), confidence: 'medium', trigger: 'paraphrase' },
@@ -335,8 +364,10 @@ async function suggestNow(ref, why, details = {}) {
   const card = await bibleDb.lookupVerse(ref)
   if (!card) {
     // Not found. Release the dedupe slot so a later, cleaner mention of the
-    // same reference still gets a chance.
+    // same reference still gets a chance. The words heard are logged, so a
+    // repeated mishearing (such as "Psalm 1:8") can be traced and fixed.
     sentRefs.delete(ref.reference)
+    log.info('pipeline', 'No such verse', { reference: ref.reference, heard: ref.heard })
     return
   }
   const now = Date.now()
@@ -361,8 +392,16 @@ chunker.on('chunk', async ({ text, chunkId, startAt, fireAt }) => {
 
   // 2. LLM: catches allusions that share no words with the verse, when LM
   // Studio is available. It names verses from memory, so each one is checked
-  // against its KJV text below before it becomes a card.
-  const llmRefs = await llmClient.queryScriptures(text, contextText)
+  // against its KJV text below before it becomes a card. It yields to the
+  // per-line judge: on a slower LLM machine the two would queue behind each
+  // other and the judge, the faster path to a card, would time out.
+  let llmRefs = []
+  if (!_judgeBusy && !_chunkLlmBusy) {
+    _chunkLlmBusy = true
+    _lastLlmAt = Date.now()
+    try { llmRefs = await llmClient.queryScriptures(text, contextText) }
+    finally { _chunkLlmBusy = false }
+  }
   const llmErr  = llmClient.getLastError()
   if (llmErr) {
     mainWindow?.webContents.send('llm-error', { message: llmErr })
@@ -404,11 +443,13 @@ chunker.on('chunk', async ({ text, chunkId, startAt, fireAt }) => {
 function handleWhisperMessage(msg) {
   switch (msg.type) {
     case 'partial':
-      // Words of the sentence still being spoken. Shown, never detected on,
-      // so a half-heard "John 3" cannot become a card.
+      // Words of the sentence still being spoken: shown, and checked for a
+      // reference so a long sentence does not hold its card back.
       mainWindow?.webContents.send('transcript-partial', msg)
+      processPartial(msg.text)
       break
     case 'transcript': {
+      _partialRefs = new Set()
       log.info('whisper', 'Line', { latencyMs: msg.latency_ms, decodeMs: msg.decode_ms })
       mainWindow?.webContents.send('transcript-update', msg)
       chunker.addText(msg.text)
@@ -494,7 +535,9 @@ ipcMain.handle('start-listening', async (_e, { model = 'auto', deviceIndex: requ
   _translationAsked.clear()
   _previousLine = ''
   _judgeNext = null
+  _partialRefs = new Set()
   chunker.start()
+  llmClient.keepWarm()
 
   // Remember the choice so the next service starts configured.
   settings.save({ whisperModel: model, deviceIndex })
@@ -750,6 +793,14 @@ app.whenReady().then(() => {
     },
     toggleMini: () => miniPanel.toggleCollapsed(),
   })
+
+  // While listening, keep the LLM loaded with a tiny request when it has been
+  // idle for a minute (see llmClient.keepWarm).
+  setInterval(() => {
+    if (!whisperProcess || Date.now() - _lastLlmAt < 60_000) return
+    _lastLlmAt = Date.now()
+    llmClient.keepWarm()
+  }, 15_000)
 
   // Build the verse index after the window is up, so start-up stays quick.
   setTimeout(async () => {
