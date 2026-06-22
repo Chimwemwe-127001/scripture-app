@@ -117,6 +117,14 @@ def main():
         print(f'   Projection laptop address:  {addr}:{args.port}')
     print(f'   Receiver key:               {Handler.key}')
     print('VideoPsalm', 'is open.' if bridge.is_running() else 'is not open yet. Open it before the service.')
+    # Look VideoPsalm's controls and the current Bible's book names up now, as
+    # the panel's own bridge does, so the first verse is not the slow one.
+    try:
+        if bridge.find_vp_hwnd():
+            warm = bridge.controls(bridge.find_vp_hwnd())
+            bridge.book_names(warm, bridge.translation_of(warm)[1])
+    except Exception:
+        pass
     print('Leave this window open during the service. Close it to stop.\n', flush=True)
     try:
         server.serve_forever()
