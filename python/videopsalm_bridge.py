@@ -235,6 +235,7 @@ def set_bible(name):
         if short.upper().replace('-', '') == name.upper().replace('-', '') or name.lower() in full.lower():
             break
     full, short = translation_of(ctrl)
+    book_names(ctrl, short)   # read now, so the next verse is not slowed by it
     return True, None, {'current': short, 'currentName': full}
 
 
