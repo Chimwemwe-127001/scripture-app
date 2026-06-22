@@ -32,12 +32,26 @@ Written for the rest of our media team, and for anyone who takes the desk during
 1. Open VideoPsalm and choose the Bible you project from (KJV, NKJV...). It can stay behind our window; the app opens its Bibles tab when it needs it.
 2. Open Scripture Panel. Press `Ctrl+,` for settings.
 3. Choose the **input device** that carries the pulpit microphone. This is the most common mistake, so check it every time.
-4. Leave the **Whisper model** on `small` unless the PC has a good graphics card.
+4. Leave the **Whisper model** on **Automatic**. It picks the best model for the graphics card, or a smaller one on a PC without one.
 5. Close settings and press **Listen** (`Ctrl+L`). Say a sentence into the pulpit mic and check that words appear in the transcript.
 
 Your choices are saved, so next week you can usually go straight to step 5.
 
 **Is LM Studio needed?** No. Without it the app still catches every verse that is named out loud ("Romans 8:28"). With it, the app also catches verses that are quoted or paraphrased without being named.
+
+### Two screens: the stream and the projector
+
+When the stream laptop and the projection laptop each run VideoPsalm, one Scripture Panel can put a verse on both with one keypress. The panel runs on the stream laptop (it has the graphics card and the microphone feed); the projection laptop runs a small receiver.
+
+Once, on the projection laptop:
+
+1. Copy `Scripture Panel Receiver.exe` to it (any folder, for example the Desktop). Nothing else needs installing.
+2. Open it. Windows Firewall asks once: allow it on **Private** networks. Set that laptop's network to Private if it is not.
+3. Its window shows two things to copy: the **Projection laptop address** (for example `192.168.1.128:8765`) and the **Receiver key**.
+
+Once, on the stream laptop: in Scripture Panel, open Settings (`Ctrl+,`), go to **VideoPsalm**, enter the address and key, and press **Save and test**. It should say "Connected". A **Projector** light then shows in the top bar.
+
+Each service: open VideoPsalm and the receiver on the projection laptop and leave the receiver's window open. Sending, switching Bible (`T`), hiding the text (`Ctrl+Alt+0`) and blanking (`Ctrl+Alt+B`) then act on both screens. Untick either screen in Settings to send to the other only. If one laptop does not answer, the other still updates and the status bar names the one that failed.
 
 ## During the service
 
