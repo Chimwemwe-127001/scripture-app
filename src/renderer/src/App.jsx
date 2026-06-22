@@ -58,6 +58,7 @@ export default function App() {
 
   // VideoPsalm status
   const [vpStatus, setVpStatus]         = useState(false)
+  const [projStatus, setProjStatus]     = useState(null)   // projection laptop: true, false, or null when not set up
 
   // Selected whisper model + audio device (chosen in the settings panel)
   const [whisperModel, setWhisperModel]   = useState('auto')
@@ -131,7 +132,7 @@ export default function App() {
 
     api.checkBibleDb().then(r => setBibleDbReady(r.ready))
     api.checkLlmStatus().then(r => setLlmStatus(r))
-    api.checkVideoPsalm?.().then(r => setVpStatus(r?.running ?? false))
+    api.checkVideoPsalm?.().then(r => { setVpStatus(r?.running ?? false); setProjStatus(r?.projection ?? null) })
   }, [])
 
   useEffect(() => {
@@ -172,6 +173,7 @@ export default function App() {
     const id = setInterval(async () => {
       const r = await api.checkVideoPsalm()
       setVpStatus(r?.running ?? false)
+      setProjStatus(r?.projection ?? null)
     }, 15_000)
     return () => clearInterval(id)
   }, [])
@@ -213,6 +215,8 @@ export default function App() {
     try {
       const result = await api.sendToVideoPsalm(scripture.reference)
       if (result?.ok) {
+        // One screen worked; say which one did not, without blocking.
+        if (result.failed?.length) setErrorMsg(result.failed.join(' · '))
         handleSent(scripture, true, result.shown)
         return { ok: true }
       }
@@ -508,6 +512,7 @@ export default function App() {
         engine={engine}
         llmStatus={llmStatus}
         vpStatus={vpStatus}
+        projStatus={projStatus}
         bibleDbReady={bibleDbReady}
         onToggleListen={isListening ? handleStopListening : handleStartListening}
         miniOn={miniOn}

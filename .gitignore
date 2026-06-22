@@ -32,3 +32,7 @@ Thumbs.db
 
 # Real service recordings and their transcripts, used only locally for evaluation
 eval-audio/
+
+# The projection receiver's key, made on first run
+python/vp_receiver.json
+dist-receiver/

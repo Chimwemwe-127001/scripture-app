@@ -169,11 +169,17 @@ let _vpBusy  = false
  * command never returns, the bridge is restarted so later sends still work.
  */
 const VP_TIMEOUT_MS = 5000
+// A freshly started bridge first looks VideoPsalm's controls and book names up
+// (a few seconds, longer if VideoPsalm has just opened). Its first command gets
+// this long, so a slow start cannot time out, restart, and start slowly again.
+const VP_FIRST_TIMEOUT_MS = 20000
+let _vpFresh = false
 
 function _getVpProc() {
   if (_vpProc && !_vpProc.killed) return _vpProc
 
   _vpProc = spawn(pythonCmd(), [join(pythonDir(), 'videopsalm_bridge.py'), '--daemon'])
+  _vpFresh = true
   log.info('vpBridge', 'Spawned VideoPsalm bridge daemon')
 
   _vpProc.on('error', (err) => {
@@ -242,6 +248,11 @@ function _drainVpQueue() {
 }
 
 function callVpBridge(params, timeoutMs = VP_TIMEOUT_MS) {
+  _getVpProc()
+  if (_vpFresh) {
+    timeoutMs = Math.max(timeoutMs, VP_FIRST_TIMEOUT_MS)
+    _vpFresh = false
+  }
   return new Promise((resolve, reject) => {
     const entry = { cmd: JSON.stringify(params), resolve, reject, timer: null }
 
@@ -601,41 +612,89 @@ ipcMain.handle('stop-listening', async () => {
   return { stopped: true }
 })
 
-ipcMain.handle('check-videopsalm', async () => {
-  try   { return await callVpBridge({ action: 'check' }) }
-  catch { return { running: false } }
-})
+// ---------------------------------------------------------------------------
+// VideoPsalm targets: this laptop's, and the projection laptop's through its
+// receiver (python/vp_receiver.py). Each command goes to every target that is
+// switched on in Settings, at the same time, so the stream and the projector
+// change together. A target that fails does not stop the others.
+// ---------------------------------------------------------------------------
 
-ipcMain.handle('send-to-videopsalm', async (_e, reference) => {
+/** The projection laptop's receiver, or an error result if it does not answer. */
+async function callProjection(params) {
+  const { projectionAddress: address, projectionKey: key } = settings.load()
   try {
-    const t0 = Date.now()
-    const result = await callVpBridge({ action: 'send', reference })
-    if (!result?.ok) log.warn('vpBridge', 'Send failed', { reference, error: result?.error })
-    else log.info('vpBridge', 'On screen', { reference, ms: Date.now() - t0, translation: result.shown?.translation })
-    return result
+    const hostPort = /:\d+$/.test(address) ? address : `${address}:8765`   // the receiver's default port
+    const res = await fetch(`http://${hostPort}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Receiver-Key': key || '' },
+      body: JSON.stringify(params),
+      signal: AbortSignal.timeout(VP_TIMEOUT_MS),
+    })
+    return await res.json()
   } catch (err) {
-    log.error('vpBridge', 'Send threw', { reference, error: err.message })
-    return { ok: false, error: err.message }
+    return { ok: false, running: false, error: `not reachable (${err.message})` }
   }
+}
+
+function vpTargets() {
+  const s = settings.load()
+  const targets = []
+  if (s.sendToLocal) targets.push({ name: 'This laptop', call: (p) => callVpBridge(p) })
+  if (s.sendToProjection && s.projectionAddress) targets.push({ name: 'Projection laptop', call: callProjection })
+  return targets
+}
+
+/**
+ * Run one VideoPsalm command on every target. The answer is the first target
+ * that succeeded; `failed` lists any that did not, e.g. "Projection laptop:
+ * VideoPsalm is not open", so the operator hears about it without the other
+ * screen being held up.
+ */
+async function onAllTargets(run) {
+  const targets = vpTargets()
+  if (!targets.length) return { ok: false, error: 'No VideoPsalm is switched on in Settings' }
+  const results = await Promise.all(targets.map(async (t) => {
+    try { return { name: t.name, ...(await run(t.call)) } }
+    catch (err) { return { name: t.name, ok: false, error: err.message } }
+  }))
+  const good = results.find(r => r.ok)
+  const failed = results.filter(r => !r.ok).map(r => `${r.name}: ${r.error || 'failed'}`)
+  if (failed.length) log.warn('vpBridge', 'Some targets failed', { failed })
+  return good ? { ...good, failed } : { ok: false, error: failed.join('; ') }
+}
+
+ipcMain.handle('check-videopsalm', async () => {
+  const s = settings.load()
+  let running = false
+  try { running = !!(await callVpBridge({ action: 'check' }))?.running } catch { /* not running */ }
+  const projection = s.projectionAddress && s.sendToProjection
+    ? !!(await callProjection({ action: 'check' }))?.running
+    : null
+  return { running, projection }
+})
+ipcMain.handle('send-to-videopsalm', async (_e, reference) => {
+  const t0 = Date.now()
+  const result = await onAllTargets((call) => call({ action: 'send', reference }))
+  if (!result.ok) log.warn('vpBridge', 'Send failed', { reference, error: result.error })
+  else log.info('vpBridge', 'On screen', { reference, ms: Date.now() - t0, translation: result.shown?.translation })
+  return result
 })
 
 // Switch VideoPsalm's Bible to a translation code such as 'NIV'. VideoPsalm
 // names some Bibles its own way ('NIV84'), so the code is matched against its
 // favourite Bible buttons first.
 ipcMain.handle('set-videopsalm-bible', async (_e, code) => {
-  try {
-    const listed = await callVpBridge({ action: 'bibles' })
+  return onAllTargets(async (call) => {
+    const listed = await call({ action: 'bibles' })
     if (!listed?.ok) return { ok: false, error: listed?.error || 'VideoPsalm did not answer' }
     const name = matchBible(code, listed.result.bibles)
     if (!name) {
-      return { ok: false, error: `${code} is not among VideoPsalm's Bibles (${listed.result.bibles.join(', ')})` }
+      return { ok: false, error: `${code} is not among its Bibles (${listed.result.bibles.join(', ')})` }
     }
-    const result = await callVpBridge({ action: 'set-bible', name })
+    const result = await call({ action: 'set-bible', name })
     if (result?.ok) log.info('vpBridge', 'Bible switched', { code, name })
     return result?.ok ? { ok: true, translation: result.result.current } : { ok: false, error: result?.error }
-  } catch (err) {
-    return { ok: false, error: err.message }
-  }
+  })
 })
 
 /**
@@ -784,12 +843,8 @@ app.whenReady().then(() => {
   hotkeys.register({
     toRenderer: (action) => mainWindow?.webContents.send('mini-action', action),
     pressScreenButton: async (button) => {
-      try {
-        const r = await callVpBridge({ action: 'press', button })
-        return r?.ok ? { ok: true, on: r.result.on } : { ok: false, error: r?.error }
-      } catch (err) {
-        return { ok: false, error: err.message }
-      }
+      const r = await onAllTargets((call) => call({ action: 'press', button }))
+      return r.ok ? { ok: true, on: r.result?.on } : { ok: false, error: r.error }
     },
     toggleMini: () => miniPanel.toggleCollapsed(),
   })
