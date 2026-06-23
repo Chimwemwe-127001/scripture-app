@@ -2,14 +2,16 @@
  * companion.js: Scripture Panel Companion, the program for the second laptop.
  *
  * Laptop 1 runs the full Scripture Panel (Whisper, detection, LM Studio). This
- * runs next to VideoPsalm on laptop 2 and does three things:
- *   - carries out VideoPsalm commands from laptop 1 (POST /command), through
- *     the same bridge laptop 1 uses;
+ * runs next to VideoPsalm on laptop 2 and:
  *   - shows the mini panel docked to this laptop's VideoPsalm or OBS, with the
- *     state laptop 1 publishes (POST /mini/state);
- *   - passes this panel's buttons and keys back to laptop 1 (GET /mini/actions,
- *     which laptop 1 keeps open), so laptop 1 stays the single source of truth
- *     and both panels always agree.
+ *     cards laptop 1 publishes (POST /mini/state);
+ *   - sends a card, switches the Bible and presses Text or Blank on this
+ *     laptop's VideoPsalm only, when someone here presses it. Laptop 1 drives
+ *     its own VideoPsalm the same way, so neither screen follows the other;
+ *   - passes the listen button back to laptop 1 (GET /mini/actions, which
+ *     laptop 1 keeps open), as listening happens there;
+ *   - still carries out VideoPsalm commands from laptop 1 (POST /command), for
+ *     a setup where only this laptop has VideoPsalm.
  *
  * Laptop 1 makes every connection, using the address and key in its Settings,
  * so only that one laptop needs setting up. Every request must carry the key.
@@ -31,6 +33,7 @@ const miniPanel = require('./miniPanel')
 const hotkeys = require('./hotkeys')
 const settings = require('./settings')
 const log = require('./logger')
+const { matchBible } = require('./translationRequest')
 
 const PORT = 8765
 const BRIDGE_TIMEOUT_MS = 5000
@@ -38,6 +41,7 @@ const BRIDGE_FIRST_TIMEOUT_MS = 20000   // a new bridge first reads VideoPsalm's
 const LONG_POLL_MS = 25000
 const LINK_SHAKY_MS = 10000             // laptop 1 repeats its state every 4 s
 const LINK_LOST_MS = 30000              // only then show the pairing details again
+const ASK_TTL_MS = 2 * 60 * 1000        // a Bible request fades after 2 minutes, as on laptop 1
 
 // ---------------------------------------------------------------------------
 // The packaged helper (or the Python scripts when developing)
@@ -146,10 +150,90 @@ function addresses() {
   return out
 }
 
-/** What the panel shows: laptop 1's state, plus how to pair while it is away. */
+// This laptop's own screen: what it shows, its messages, and the Bible request
+// it has not answered yet. Laptop 1 keeps its own, so they never mix.
+const own = { live: null, notice: '', error: '', ask: null, answered: '' }
+let noticeTimer = null
+
+function say(text, isError = false) {
+  own.notice = isError ? '' : text
+  own.error = isError ? text : ''
+  clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => { own.notice = ''; own.error = ''; showPanel() }, isError ? 8000 : 4000)
+  showPanel()
+}
+
+/** A new Bible request from laptop 1 stays here until someone here answers it. */
+function takeAsk(ask) {
+  const id = ask ? `${ask.code}|${ask.at}` : ''
+  if (ask && id !== own.answered && id !== own.ask?.id) own.ask = { ...ask, id }
+}
+
+/** What the panel shows: laptop 1's cards with this laptop's own screen, plus how to pair while it is away. */
 function showPanel() {
   const remote = { connected: linked, reconnecting: shaky, addresses: addresses(), key }
-  miniPanel.showState(linked && lastState ? { ...lastState, remote } : { suggestions: [], remote })
+  if (own.ask && Date.now() - own.ask.at > ASK_TTL_MS) own.ask = null
+  const mine = { live: own.live, notice: own.notice, error: own.error, translationAsk: own.ask }
+  miniPanel.showState(linked && lastState ? { ...lastState, ...mine, remote } : { suggestions: [], ...mine, remote })
+}
+
+async function sendCard(number) {
+  const card = lastState?.suggestions?.[number - 1]
+  if (!card) return
+  say(`Sending ${card.reference} to VideoPsalm`)
+  const t0 = Date.now()
+  const r = await runCommand({ action: 'send', reference: card.reference })
+  if (!r?.ok) {
+    log.warn('companion', 'Send failed', { reference: card.reference, error: r?.error })
+    return say(`VideoPsalm: ${r?.error || 'did not answer'}`, true)
+  }
+  const first = r.shown?.verses?.[0]?.verse
+  own.live = {
+    reference: card.reference,
+    translation: r.shown?.translation,
+    mismatch: card.verseStart && first && first !== card.verseStart ? `VideoPsalm shows verse ${first}, not ${card.verseStart}` : null,
+  }
+  log.info('companion', 'On screen', { reference: card.reference, ms: Date.now() - t0, translation: r.shown?.translation })
+  say(`${card.reference} is on screen`)
+}
+
+async function switchBible() {
+  const ask = own.ask
+  if (!ask) return
+  const listed = await runCommand({ action: 'bibles' })
+  if (!listed?.ok) return say(`VideoPsalm: ${listed?.error || 'did not answer'}`, true)
+  const name = matchBible(ask.code, listed.result.bibles)
+  if (!name) return say(`VideoPsalm: ${ask.code} is not among its Bibles (${listed.result.bibles.join(', ')})`, true)
+  const r = await runCommand({ action: 'set-bible', name })
+  if (!r?.ok) return say(`VideoPsalm: ${r?.error || 'could not switch Bible'}`, true)
+  own.answered = ask.id
+  own.ask = null
+  log.info('companion', 'Bible switched', { code: ask.code, name })
+  const live = own.live
+  if (live) {
+    const again = await runCommand({ action: 'send', reference: live.reference })
+    if (again?.ok) own.live = { ...live, translation: again.shown?.translation, mismatch: null }
+  }
+  say(`VideoPsalm now uses ${r.result?.current || name}${live ? `, ${live.reference} shown again` : ''}`)
+}
+
+async function pressButton(button) {
+  const r = await runCommand({ action: 'press', button })
+  return r?.ok ? { ok: true, on: r.result?.on } : { ok: false, error: r?.error || 'did not answer' }
+}
+
+/** A press in this laptop's panel or keys. Only listening goes to laptop 1. */
+function act(action) {
+  switch (action?.type) {
+    case 'send': return sendCard(action.number)
+    case 'switch-bible': return switchBible()
+    case 'dismiss-translation':
+      if (own.ask) { own.answered = own.ask.id; own.ask = null; showPanel() }
+      return
+    case 'notice': return say(action.text, /^VideoPsalm:/.test(action.text))
+    case 'publish': showPanel(); return queueAction(action)
+    default: return queueAction(action)   // toggle-listen
+  }
 }
 
 function queueAction(action) {
@@ -221,6 +305,7 @@ function startServer() {
       }
       if (req.method === 'POST' && req.url === '/mini/state') {
         lastState = await readBody(req)
+        takeAsk(lastState.translationAsk)
         lastSeen = Date.now()
         linked = true
         showPanel()
@@ -263,18 +348,12 @@ if (!app.requestSingleInstanceLock()) {
       rendererFile: join(__dirname, '../renderer/index.html'),
       watchCommand: helper('watch'),
       hash: 'mini-remote',
-      onAction: (action) => {
-        if (action?.type === 'publish') showPanel()
-        queueAction(action)
-      },
+      onAction: act,
     })
 
     hotkeys.register({
-      toRenderer: queueAction,
-      pressScreenButton: async (button) => {
-        queueAction({ type: 'press', button })
-        return { forwarded: true }
-      },
+      toRenderer: act,
+      pressScreenButton: pressButton,
       toggleMini: () => miniPanel.toggleCollapsed(),
     })
   })
