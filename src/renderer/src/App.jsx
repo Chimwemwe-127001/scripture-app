@@ -295,8 +295,9 @@ export default function App() {
     api.onListeningStatus((msg) => {
       if (typeof msg.listening === 'boolean') {
         setIsListening(msg.listening)
-        // Whisper has reported its state, so the start-up window is over.
-        setIsStarting(false)
+        // Whisper's first message says "loading" (ready: false), and the start-up
+        // window lasts until it is ready, or stops.
+        if (msg.listening || msg.ready !== false) setIsStarting(false)
         if (!msg.listening) setPartial('')
       }
       if (msg.model) setEngine({ model: msg.model, device: msg.device })
@@ -421,7 +422,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!miniOn || !api?.publishMiniState) return
+    if (!api?.publishMiniState) return   // also read by the second laptop's panel
     const live = [...sentHistory].reverse().find(h => h.sentToVP)
     api.publishMiniState({
       suggestions: suggestions.slice(0, 9).map(s => ({
@@ -435,7 +436,7 @@ export default function App() {
       notice,
       error: errorMsg,
     })
-  }, [miniOn, publishTick, suggestions, sentHistory, translationAsk, isListening, isStarting, vpStatus, notice, errorMsg])
+  }, [publishTick, suggestions, sentHistory, translationAsk, isListening, isStarting, vpStatus, notice, errorMsg])
 
   async function toggleMini() {
     const on = await api?.setMiniPanel?.(!miniOn)
