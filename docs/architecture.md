@@ -47,7 +47,7 @@ flowchart LR
 | Preload | Node.js | App lifetime | Exposes a fixed list of functions to the renderer |
 | `whisper_worker.py` | Python | While listening | Captures audio, runs Whisper, prints one JSON message per line |
 | `videopsalm_bridge.py` | Python | Started on first use, then kept alive | Posts the reference to VideoPsalm's reference box (no focus needed) and reads the shown verse through UI Automation |
-| `companion.js` | Electron, second laptop | Runs next to that laptop's VideoPsalm | Scripture Panel Companion: carries out VideoPsalm commands from laptop 1 over the network and shows the mini panel in sync (`projectionLink.js` is laptop 1's side). Python parts are packaged as `vp_helper.py`. |
+| `companion.js` | Electron, second laptop | Runs next to that laptop's VideoPsalm | Scripture Panel Companion: shows laptop 1's cards in its mini panel and sends the ones chosen there to its own VideoPsalm, so each laptop drives only its own screen (`projectionLink.js` is laptop 1's side). Python parts are packaged as `vp_helper.py`. |
 | `vp_window_watch.py` | Python | While the mini panel is on | Reports VideoPsalm's window position and which program is in front, five times a second, so `miniPanel.js` keeps the panel docked |
 | `list_devices.py` | Python | One call | Lists usable microphones as JSON |
 

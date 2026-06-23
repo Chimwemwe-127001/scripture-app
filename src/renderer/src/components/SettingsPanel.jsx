@@ -98,8 +98,9 @@ const INPUT = `h-8 px-2 rounded-md bg-ink-2 border border-line text-fg
  * view so the console only shows what matters while someone is preaching.
  */
 /**
- * Where verses go: this laptop's VideoPsalm, the projection laptop's (through
- * Scripture Panel Companion), or both. Saved as soon as it changes.
+ * This laptop's VideoPsalm, and the link that shares the cards with the
+ * projection laptop's Scripture Panel Companion. Each laptop sends to its own
+ * screen. Saved as soon as it changes.
  */
 function VideoPsalmTargets() {
   const api = window.electronAPI
@@ -140,8 +141,11 @@ function VideoPsalmTargets() {
       <label className="flex items-center gap-2 text-fg-2">
         <input type="checkbox" className={box} checked={s.sendToProjection}
           onChange={e => save({ sendToProjection: e.target.checked })} />
-        Projection laptop's VideoPsalm
+        Share the cards with the projection laptop
       </label>
+      <p className="text-[12px] text-fg-3">
+        Each laptop puts verses on its own VideoPsalm. With this laptop's unticked, presses here go to the projection laptop.
+      </p>
       <form onSubmit={test} className="space-y-2">
         <Field label="Projection laptop address" hint="Shown in the Companion's panel, e.g. 192.168.1.128:8765.">
           <input value={address} onChange={e => setAddress(e.target.value)} spellCheck={false}

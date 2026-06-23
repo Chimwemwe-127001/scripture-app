@@ -615,10 +615,11 @@ ipcMain.handle('stop-listening', async () => {
 })
 
 // ---------------------------------------------------------------------------
-// VideoPsalm targets: this laptop's, and the projection laptop's through
-// Scripture Panel Companion (companion.js). Each command goes to every target that is
-// switched on in Settings, at the same time, so the stream and the projector
-// change together. A target that fails does not stop the others.
+// VideoPsalm screens. Each laptop drives only its own: a press here goes to
+// this laptop's VideoPsalm, and the projection laptop's Companion sends its
+// own presses to its own VideoPsalm (companion.js). Only when this laptop's
+// VideoPsalm is switched off in Settings do presses here go to the projection
+// laptop instead, for a setup with VideoPsalm on laptop 2 only.
 // ---------------------------------------------------------------------------
 
 /** The projection laptop's Companion, or an error result if it does not answer. */
@@ -636,31 +637,20 @@ async function callProjection(params) {
   }
 }
 
-function vpTargets() {
+/** The VideoPsalm that presses on this laptop drive. */
+function screenTarget() {
   const s = settings.load()
-  const targets = []
-  if (s.sendToLocal) targets.push({ name: 'This laptop', call: (p) => callVpBridge(p) })
-  if (s.sendToProjection && s.projectionAddress) targets.push({ name: 'Projection laptop', call: callProjection })
-  return targets
+  if (s.sendToLocal) return { name: 'This laptop', call: (p) => callVpBridge(p) }
+  if (s.sendToProjection && s.projectionAddress) return { name: 'Projection laptop', call: callProjection }
+  return null
 }
 
-/**
- * Run one VideoPsalm command on every target. The answer is the first target
- * that succeeded; `failed` lists any that did not, e.g. "Projection laptop:
- * VideoPsalm is not open", so the operator hears about it without the other
- * screen being held up.
- */
-async function onAllTargets(run) {
-  const targets = vpTargets()
-  if (!targets.length) return { ok: false, error: 'No VideoPsalm is switched on in Settings' }
-  const results = await Promise.all(targets.map(async (t) => {
-    try { return { name: t.name, ...(await run(t.call)) } }
-    catch (err) { return { name: t.name, ok: false, error: err.message } }
-  }))
-  const good = results.find(r => r.ok)
-  const failed = results.filter(r => !r.ok).map(r => `${r.name}: ${r.error || 'failed'}`)
-  if (failed.length) log.warn('vpBridge', 'Some targets failed', { failed })
-  return good ? { ...good, failed } : { ok: false, error: failed.join('; ') }
+/** Run one VideoPsalm command on this laptop's screen. */
+async function onScreen(run) {
+  const target = screenTarget()
+  if (!target) return { ok: false, error: 'No VideoPsalm is switched on in Settings' }
+  try { return await run(target.call) }
+  catch (err) { return { ok: false, error: err.message } }
 }
 
 ipcMain.handle('check-videopsalm', async () => {
@@ -674,7 +664,7 @@ ipcMain.handle('check-videopsalm', async () => {
 })
 ipcMain.handle('send-to-videopsalm', async (_e, reference) => {
   const t0 = Date.now()
-  const result = await onAllTargets((call) => call({ action: 'send', reference }))
+  const result = await onScreen((call) => call({ action: 'send', reference }))
   if (!result.ok) log.warn('vpBridge', 'Send failed', { reference, error: result.error })
   else log.info('vpBridge', 'On screen', { reference, ms: Date.now() - t0, translation: result.shown?.translation })
   return result
@@ -684,7 +674,7 @@ ipcMain.handle('send-to-videopsalm', async (_e, reference) => {
 // names some Bibles its own way ('NIV84'), so the code is matched against its
 // favourite Bible buttons first.
 ipcMain.handle('set-videopsalm-bible', async (_e, code) => {
-  return onAllTargets(async (call) => {
+  return onScreen(async (call) => {
     const listed = await call({ action: 'bibles' })
     if (!listed?.ok) return { ok: false, error: listed?.error || 'VideoPsalm did not answer' }
     const name = matchBible(code, listed.result.bibles)
@@ -851,22 +841,24 @@ app.whenReady().then(() => {
   hotkeys.register({
     toRenderer: (action) => mainWindow?.webContents.send('mini-action', action),
     pressScreenButton: async (button) => {
-      const r = await onAllTargets((call) => call({ action: 'press', button }))
+      const r = await onScreen((call) => call({ action: 'press', button }))
       return r.ok ? { ok: true, on: r.result?.on } : { ok: false, error: r.error }
     },
     toggleMini: () => miniPanel.toggleCollapsed(),
   })
 
-  // The second laptop's mini panel: it shows what this window publishes, and
-  // its buttons and keys act here, so both panels always agree.
+  // The second laptop's mini panel shows the cards this window publishes.
+  // Its sends and screen buttons stay on that laptop; only starting and
+  // stopping listening (and asking for the state) come here.
   ipcMain.on('mini-state', (_e, state) => {
     miniPanel.showState(state)
     projectionLink.pushState(state)
   })
   projectionLink.start({
     onAction: (action) => {
-      if (action?.type === 'press') hotkeys.press(action.button)
-      else mainWindow?.webContents.send('mini-action', action)
+      if (action?.type === 'toggle-listen' || action?.type === 'publish') {
+        mainWindow?.webContents.send('mini-action', action)
+      }
     },
   })
 

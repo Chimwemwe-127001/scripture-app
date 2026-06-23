@@ -41,7 +41,7 @@ Your choices are saved, so next week you can usually go straight to step 5.
 
 ### Two laptops: the stream and the projector
 
-When each laptop runs VideoPsalm, one Scripture Panel can put a verse on both with one keypress, and both laptops show the same mini panel. The full Scripture Panel runs on laptop 1 (it does the listening and detection). Laptop 2 runs **Scripture Panel Companion**, which needs no Python and no graphics card.
+When each laptop runs VideoPsalm, both laptops show the same cards in their mini panel, and each operator chooses what goes on their own screen. The full Scripture Panel runs on laptop 1 (it does the listening and detection). Laptop 2 runs **Scripture Panel Companion**, which needs no Python and no graphics card.
 
 Once, on laptop 2:
 
@@ -51,7 +51,7 @@ Once, on laptop 2:
 
 Once, on laptop 1: in Scripture Panel, open Settings (`Ctrl+,`), go to **VideoPsalm**, enter the address and key, and press **Save and test**. It should say "Connected". A **Projector** light then shows in the top bar, and laptop 2's panel fills with the same cards.
 
-Each service: open VideoPsalm and the Companion on laptop 2. Both panels stay in step, and either one works: a card, a number key, `T`, the microphone button and the `Ctrl+Alt` keys on laptop 2 all act through laptop 1, and the verse goes to both screens. Untick either screen in Settings to send to the other only. If one laptop does not answer, the other still updates and the status bar names the one that failed. If laptop 1 goes away, laptop 2's panel returns to the waiting screen.
+Each service: open VideoPsalm and the Companion on laptop 2. New cards show on both panels at the same time, but each laptop drives only its own VideoPsalm. A card, a number key, `T` (switch Bible), **Text** and **Blank** pressed on laptop 1 change laptop 1's screen only, and the same presses on laptop 2 change laptop 2's screen only. Each panel shows what is on its own screen under **On screen**. The microphone button on either laptop starts and stops the listening on laptop 1. If only laptop 2 has VideoPsalm, untick **This laptop's VideoPsalm** in Settings and laptop 1's presses go to laptop 2. If the link drops for a moment, laptop 2's panel shows **Reconnecting**; after 30 seconds it returns to the waiting screen.
 
 ## During the service
 
