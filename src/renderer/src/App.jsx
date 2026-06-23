@@ -215,8 +215,6 @@ export default function App() {
     try {
       const result = await api.sendToVideoPsalm(scripture.reference)
       if (result?.ok) {
-        // One screen worked; say which one did not, without blocking.
-        if (result.failed?.length) setErrorMsg(result.failed.join(' · '))
         handleSent(scripture, true, result.shown)
         return { ok: true }
       }
@@ -427,6 +425,7 @@ export default function App() {
     api.publishMiniState({
       suggestions: suggestions.slice(0, 9).map(s => ({
         id: s.id, reference: s.reference, text: s.text, trigger: s.trigger, chapterOnly: s.chapterOnly,
+        verseStart: s.verseStart,
       })),
       live: live ? { reference: live.reference, translation: live.translation, mismatch: live.mismatch } : null,
       translationAsk,

@@ -33,7 +33,6 @@ function register({ toRenderer, pressScreenButton, toggleMini }) {
 
   async function screenButton(button) {
     const result = await pressScreenButton(button)
-    if (result?.forwarded) return   // the laptop running the panel reports it
     const what = button === 'text' ? 'Verse text' : 'Screen'
     const state = button === 'text' ? (result?.on ? 'shown' : 'hidden') : (result?.on ? 'off' : 'on')
     toRenderer({
@@ -41,8 +40,6 @@ function register({ toRenderer, pressScreenButton, toggleMini }) {
       text: result?.ok === false ? `VideoPsalm: ${result.error}` : `${what} ${state}`,
     })
   }
-
-  pressScreen = screenButton
 
   const taken = []
   for (const [accelerator, run] of Object.entries(keys)) {
@@ -57,15 +54,8 @@ function register({ toRenderer, pressScreenButton, toggleMini }) {
   return taken
 }
 
-let pressScreen = async () => {}
-
-/** Toggle 'text' or 'blank' as its hotkey does, for a press from the other laptop. */
-function press(button) {
-  return pressScreen(button)
-}
-
 function unregister() {
   globalShortcut.unregisterAll()
 }
 
-module.exports = { register, unregister, press }
+module.exports = { register, unregister }
