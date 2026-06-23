@@ -36,7 +36,8 @@ const PORT = 8765
 const BRIDGE_TIMEOUT_MS = 5000
 const BRIDGE_FIRST_TIMEOUT_MS = 20000   // a new bridge first reads VideoPsalm's controls and book names
 const LONG_POLL_MS = 25000
-const LINK_LOST_MS = 12000              // laptop 1 repeats its state every 4 s
+const LINK_SHAKY_MS = 10000             // laptop 1 repeats its state every 4 s
+const LINK_LOST_MS = 30000              // only then show the pairing details again
 
 // ---------------------------------------------------------------------------
 // The packaged helper (or the Python scripts when developing)
@@ -147,7 +148,7 @@ function addresses() {
 
 /** What the panel shows: laptop 1's state, plus how to pair while it is away. */
 function showPanel() {
-  const remote = { connected: linked, addresses: addresses(), key }
+  const remote = { connected: linked, reconnecting: shaky, addresses: addresses(), key }
   miniPanel.showState(linked && lastState ? { ...lastState, remote } : { suggestions: [], remote })
 }
 
@@ -164,12 +165,19 @@ function flushActions() {
   actions = []
 }
 
-// Laptop 1 repeats its state, so a silence means the link is gone.
+// Laptop 1 repeats its state every 4 s. A short silence (a busy network)
+// shows "Reconnecting" over the last state; only a long one goes back to the
+// pairing details.
+let shaky = false
 setInterval(() => {
-  const now = Date.now() - lastSeen < LINK_LOST_MS
-  if (now !== linked) {
-    linked = now
-    log.info('companion', linked ? 'Linked to the Scripture Panel' : 'Scripture Panel link lost')
+  const quiet = Date.now() - lastSeen
+  const nowLinked = quiet < LINK_LOST_MS
+  const nowShaky = nowLinked && quiet > LINK_SHAKY_MS
+  if (nowLinked !== linked || nowShaky !== shaky) {
+    if (nowLinked !== linked) log.info('companion', nowLinked ? 'Linked to the Scripture Panel' : 'Scripture Panel link lost')
+    else if (nowShaky) log.warn('companion', 'No word from the Scripture Panel for 10 s')
+    linked = nowLinked
+    shaky = nowShaky
     showPanel()
   }
 }, 2000)
