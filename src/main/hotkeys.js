@@ -33,6 +33,7 @@ function register({ toRenderer, pressScreenButton, toggleMini }) {
 
   async function screenButton(button) {
     const result = await pressScreenButton(button)
+    if (result?.forwarded) return   // the laptop running the panel reports it
     const what = button === 'text' ? 'Verse text' : 'Screen'
     const state = button === 'text' ? (result?.on ? 'shown' : 'hidden') : (result?.on ? 'off' : 'on')
     toRenderer({
@@ -41,17 +42,30 @@ function register({ toRenderer, pressScreenButton, toggleMini }) {
     })
   }
 
+  pressScreen = screenButton
+
   const taken = []
   for (const [accelerator, run] of Object.entries(keys)) {
-    if (!globalShortcut.register(accelerator, run)) taken.push(accelerator)
+    const pressed = () => {
+      log.info('hotkeys', 'Pressed', { accelerator })
+      run()
+    }
+    if (!globalShortcut.register(accelerator, pressed)) taken.push(accelerator)
   }
   if (taken.length) log.warn('hotkeys', 'Keys already used by another program', { taken })
   else log.info('hotkeys', 'Hotkeys ready', { count: Object.keys(keys).length })
   return taken
 }
 
+let pressScreen = async () => {}
+
+/** Toggle 'text' or 'blank' as its hotkey does, for a press from the other laptop. */
+function press(button) {
+  return pressScreen(button)
+}
+
 function unregister() {
   globalShortcut.unregisterAll()
 }
 
-module.exports = { register, unregister }
+module.exports = { register, unregister, press }

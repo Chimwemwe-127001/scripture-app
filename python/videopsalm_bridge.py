@@ -453,49 +453,54 @@ def result_json(ok, error, shown, key='shown'):
     return json.dumps(result)
 
 
+def daemon():
+    """JSON commands on stdin, one JSON answer per line on stdout."""
+    # Look VideoPsalm's controls and the current Bible's book names up now,
+    # so the first send of the service is not the slow one.
+    try:
+        if find_vp_hwnd():
+            warm = controls(find_vp_hwnd())
+            book_names(warm, translation_of(warm)[1])
+    except Exception:
+        pass
+    # Persistent daemon: read JSON commands from stdin, write results to stdout.
+    # Commands: {"action":"check"} or {"action":"send","reference":"John 3:16"}
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            cmd = json.loads(line)
+        except json.JSONDecodeError:
+            print(json.dumps({"ok": False, "error": "Bad JSON"}), flush=True)
+            continue
+        action = cmd.get("action")
+        if action == "check":
+            print(json.dumps({"running": is_running()}), flush=True)
+        elif action in ("send", "bibles", "set-bible", "press"):
+            try:
+                if action == "send":
+                    out = result_json(*send_reference(cmd.get("reference", "")))
+                elif action == "bibles":
+                    out = result_json(*list_bibles(), key='result')
+                elif action == "press":
+                    out = result_json(*press_screen_button(cmd.get("button", "")), key='result')
+                else:
+                    out = result_json(*set_bible(cmd.get("name", "")), key='result')
+            except Exception as e:
+                out = result_json(False, str(e), None)
+            print(out, flush=True)
+        else:
+            print(json.dumps({"ok": False, "error": f"Unknown action: {action}"}), flush=True)
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and sys.argv[1] == "--check":
         print(json.dumps({"running": is_running()}), flush=True)
         sys.exit(0)
 
     if len(sys.argv) >= 2 and sys.argv[1] == "--daemon":
-        # Look VideoPsalm's controls and the current Bible's book names up now,
-        # so the first send of the service is not the slow one.
-        try:
-            if find_vp_hwnd():
-                warm = controls(find_vp_hwnd())
-                book_names(warm, translation_of(warm)[1])
-        except Exception:
-            pass
-        # Persistent daemon: read JSON commands from stdin, write results to stdout.
-        # Commands: {"action":"check"} or {"action":"send","reference":"John 3:16"}
-        for line in sys.stdin:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                cmd = json.loads(line)
-            except json.JSONDecodeError:
-                print(json.dumps({"ok": False, "error": "Bad JSON"}), flush=True)
-                continue
-            action = cmd.get("action")
-            if action == "check":
-                print(json.dumps({"running": is_running()}), flush=True)
-            elif action in ("send", "bibles", "set-bible", "press"):
-                try:
-                    if action == "send":
-                        out = result_json(*send_reference(cmd.get("reference", "")))
-                    elif action == "bibles":
-                        out = result_json(*list_bibles(), key='result')
-                    elif action == "press":
-                        out = result_json(*press_screen_button(cmd.get("button", "")), key='result')
-                    else:
-                        out = result_json(*set_bible(cmd.get("name", "")), key='result')
-                except Exception as e:
-                    out = result_json(False, str(e), None)
-                print(out, flush=True)
-            else:
-                print(json.dumps({"ok": False, "error": f"Unknown action: {action}"}), flush=True)
+        daemon()
         sys.exit(0)
 
     if len(sys.argv) < 2:

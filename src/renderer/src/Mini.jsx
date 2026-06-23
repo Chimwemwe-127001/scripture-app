@@ -10,6 +10,9 @@ const SOURCE = { explicit: 'Cited', paraphrase: 'Paraphrase', allusion: 'Allusio
 const drag = { WebkitAppRegion: 'drag' }
 const noDrag = { WebkitAppRegion: 'no-drag' }
 
+// The second laptop's panel (Scripture Panel Companion) has no full window to open.
+const IS_COMPANION = window.location.hash === '#mini-remote'
+
 function HeaderButton({ icon, label, onClick, children }) {
   return (
     <button
@@ -71,10 +74,21 @@ export default function Mini() {
         <HeaderButton label="Collapse or expand" onClick={() => act({ type: 'collapse' })}>
           <span className="font-mono text-[13px]">_</span>
         </HeaderButton>
-        <HeaderButton label="Open the full window" onClick={() => act({ type: 'open-main' })}>
-          <span className="text-[12px]">Full</span>
-        </HeaderButton>
+        {!IS_COMPANION && (
+          <HeaderButton label="Open the full window" onClick={() => act({ type: 'open-main' })}>
+            <span className="text-[12px]">Full</span>
+          </HeaderButton>
+        )}
       </header>
+
+      {s.remote && !s.remote.connected && (
+        <div className="px-3 py-3 border-b border-line text-[12px] space-y-1.5">
+          <p className="text-fg">Waiting for the Scripture Panel on laptop 1.</p>
+          <p className="text-fg-3">In its Settings, under VideoPsalm, enter:</p>
+          <p className="text-fg-2">Address: <span className="font-mono select-text">{s.remote.addresses?.join(' or ') || 'not on a network'}</span></p>
+          <p className="text-fg-2">Key: <span className="font-mono select-text">{s.remote.key}</span></p>
+        </div>
+      )}
 
       <TranslationRequest
         compact

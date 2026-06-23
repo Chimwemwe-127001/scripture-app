@@ -36,3 +36,5 @@ eval-audio/
 # The projection receiver's key, made on first run
 python/vp_receiver.json
 dist-receiver/
+dist-helper/
+dist-companion/

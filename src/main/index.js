@@ -12,6 +12,7 @@ const { wordsToDigits } = require('./numberWords')
 const settings       = require('./settings')
 const miniPanel      = require('./miniPanel')
 const hotkeys        = require('./hotkeys')
+const projectionLink = require('./projectionLink')
 const log            = require('./logger')
 
 let mainWindow = null
@@ -613,20 +614,18 @@ ipcMain.handle('stop-listening', async () => {
 })
 
 // ---------------------------------------------------------------------------
-// VideoPsalm targets: this laptop's, and the projection laptop's through its
-// receiver (python/vp_receiver.py). Each command goes to every target that is
+// VideoPsalm targets: this laptop's, and the projection laptop's through
+// Scripture Panel Companion (companion.js). Each command goes to every target that is
 // switched on in Settings, at the same time, so the stream and the projector
 // change together. A target that fails does not stop the others.
 // ---------------------------------------------------------------------------
 
-/** The projection laptop's receiver, or an error result if it does not answer. */
+/** The projection laptop's Companion, or an error result if it does not answer. */
 async function callProjection(params) {
-  const { projectionAddress: address, projectionKey: key } = settings.load()
   try {
-    const hostPort = /:\d+$/.test(address) ? address : `${address}:8765`   // the receiver's default port
-    const res = await fetch(`http://${hostPort}/command`, {
+    const res = await fetch(projectionLink.projectionUrl('/command'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Receiver-Key': key || '' },
+      headers: projectionLink.headers(),
       body: JSON.stringify(params),
       signal: AbortSignal.timeout(VP_TIMEOUT_MS),
     })
@@ -804,12 +803,20 @@ function createWindow() {
   }
 
   miniPanel.init({
-    getMain: () => mainWindow,
+    onAction: (action) => mainWindow?.webContents.send('mini-action', action),
+    openMain: () => {
+      if (!mainWindow) return
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      // Windows may refuse to bring a window forward; a moment always-on-top wins.
+      mainWindow.setAlwaysOnTop(true)
+      mainWindow.show()
+      mainWindow.focus()
+      mainWindow.setAlwaysOnTop(false)
+    },
     preload: join(__dirname, '../preload/index.js'),
     rendererUrl: !app.isPackaged ? process.env['ELECTRON_RENDERER_URL'] : null,
     rendererFile: join(__dirname, '../renderer/index.html'),
-    python: pythonCmd(),
-    pythonDir: pythonDir(),
+    watchCommand: { cmd: pythonCmd(), args: [join(pythonDir(), 'vp_window_watch.py')], cwd: pythonDir() },
   })
 }
 
@@ -847,6 +854,19 @@ app.whenReady().then(() => {
       return r.ok ? { ok: true, on: r.result?.on } : { ok: false, error: r.error }
     },
     toggleMini: () => miniPanel.toggleCollapsed(),
+  })
+
+  // The second laptop's mini panel: it shows what this window publishes, and
+  // its buttons and keys act here, so both panels always agree.
+  ipcMain.on('mini-state', (_e, state) => {
+    miniPanel.showState(state)
+    projectionLink.pushState(state)
+  })
+  projectionLink.start({
+    onAction: (action) => {
+      if (action?.type === 'press') hotkeys.press(action.button)
+      else mainWindow?.webContents.send('mini-action', action)
+    },
   })
 
   // While listening, keep the LLM loaded with a tiny request when it has been

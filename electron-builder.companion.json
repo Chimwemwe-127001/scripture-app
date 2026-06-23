@@ -1,0 +1,17 @@
+{
+  "appId": "com.col.scripture-panel-companion",
+  "productName": "Scripture Panel Companion",
+  "copyright": "Copyright © 2026 Sinyinza Chimwemwe",
+  "extraMetadata": { "main": "./out/main/companion.js", "name": "scripture-panel-companion" },
+  "asar": true,
+  "directories": { "output": "dist-companion", "buildResources": "resources" },
+  "files": ["out/**/*", "package.json"],
+  "extraResources": [{ "from": "dist-helper/vp-helper", "to": "vp-helper" }],
+  "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "resources/icon.ico" },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
+    "shortcutName": "Scripture Panel Companion",
+    "artifactName": "Scripture Panel Companion Setup.exe"
+  }
+}

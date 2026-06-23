@@ -16,6 +16,6 @@ import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {window.location.hash === '#mini' ? <Mini /> : <App />}
+    {window.location.hash.startsWith('#mini') ? <Mini /> : <App />}
   </React.StrictMode>
 )

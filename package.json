@@ -12,7 +12,8 @@
     "screenshots": "electron-vite build && electron scripts/capture-screenshots.js",
     "setup-bible": "node scripts/setup-bible-db.js",
     "dist": "electron-vite build && electron-builder",
-    "dist:win": "electron-vite build && electron-builder --win"
+    "dist:win": "electron-vite build && electron-builder --win",
+    "dist:companion": "electron-vite build && python -m PyInstaller --noconfirm --onedir --console --name vp-helper --paths python --hidden-import comtypes.stream --collect-submodules pywinauto --distpath dist-helper --workpath dist-helper/build --specpath dist-helper python/vp_helper.py && electron-builder --config electron-builder.companion.json --win"
   },
   "repository": {
     "type": "git",

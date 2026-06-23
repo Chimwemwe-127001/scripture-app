@@ -20,7 +20,6 @@
 
 const { BrowserWindow, ipcMain, screen } = require('electron')
 const { spawn } = require('child_process')
-const { join } = require('path')
 const settings = require('./settings')
 const log = require('./logger')
 
@@ -32,27 +31,15 @@ let vp = null            // last report from the watcher
 let lastHost = null      // where the panel was last docked, kept while it has focus
 let placing = false      // true while we move the panel ourselves
 let dragging = false     // true while the operator drags or resizes it
-let opts = null          // { getMain, preload, rendererUrl, rendererFile, python, pythonDir }
+let opts = null          // { preload, rendererUrl, rendererFile, watchCommand, onAction, openMain, hash }
 
 function init(options) {
   opts = options
 
-  ipcMain.on('mini-state', (_e, state) => win?.webContents.send('mini-state', state))
   ipcMain.on('mini-action', (_e, action) => {
-    const main = opts.getMain()
-    if (action?.type === 'open-main') {
-      if (!main) return
-      if (main.isMinimized()) main.restore()
-      // Windows may refuse to bring a window forward; a moment always-on-top wins.
-      main.setAlwaysOnTop(true)
-      main.show()
-      main.focus()
-      main.setAlwaysOnTop(false)
-    } else if (action?.type === 'collapse') {
-      toggleCollapsed()
-    } else {
-      main?.webContents.send('mini-action', action)
-    }
+    if (action?.type === 'open-main') opts.openMain?.()
+    else if (action?.type === 'collapse') toggleCollapsed()
+    else opts.onAction(action)
   })
   ipcMain.handle('set-mini-panel', (_e, on) => {
     settings.save({ miniPanel: !!on })
@@ -94,8 +81,9 @@ function createWindow() {
   })
   win.setAlwaysOnTop(true, 'floating')
 
-  if (opts.rendererUrl) win.loadURL(`${opts.rendererUrl}#mini`)
-  else win.loadFile(opts.rendererFile, { hash: 'mini' })
+  const hash = opts.hash || 'mini'
+  if (opts.rendererUrl) win.loadURL(`${opts.rendererUrl}#${hash}`)
+  else win.loadFile(opts.rendererFile, { hash })
 
   // Only the operator's own drags count. Electron also reports "moved" when
   // it first shows the window, and DPI rounding can change the size by a
@@ -111,9 +99,8 @@ function createWindow() {
 }
 
 function startWatch() {
-  const proc = spawn(opts.python, [join(opts.pythonDir, 'vp_window_watch.py')], {
-    cwd: opts.pythonDir, windowsHide: true,
-  })
+  const { cmd, args, cwd } = opts.watchCommand
+  const proc = spawn(cmd, args, { cwd, windowsHide: true })
   watch = proc
   let buffer = ''
   proc.stdout.on('data', (chunk) => {
@@ -209,4 +196,9 @@ function toggleCollapsed() {
   place()
 }
 
-module.exports = { init, stop, toggleCollapsed }
+/** Show a state in the panel. */
+function showState(state) {
+  win?.webContents.send('mini-state', state)
+}
+
+module.exports = { init, stop, toggleCollapsed, showState }
