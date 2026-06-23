@@ -99,7 +99,7 @@ const INPUT = `h-8 px-2 rounded-md bg-ink-2 border border-line text-fg
  */
 /**
  * Where verses go: this laptop's VideoPsalm, the projection laptop's (through
- * its receiver, python/vp_receiver.py), or both. Saved as soon as it changes.
+ * Scripture Panel Companion), or both. Saved as soon as it changes.
  */
 function VideoPsalmTargets() {
   const api = window.electronAPI
@@ -124,7 +124,7 @@ function VideoPsalmTargets() {
     setStatus('Checking…')
     const r = await api.checkVideoPsalm()
     setStatus(r?.projection === true ? 'Connected. VideoPsalm is open on the projection laptop.'
-      : r?.projection === false ? 'No answer. Is the receiver running there, with VideoPsalm open?'
+      : r?.projection === false ? 'No answer. Is the Companion running there, with VideoPsalm open?'
       : 'Enter the address to connect.')
   }
 
@@ -143,11 +143,11 @@ function VideoPsalmTargets() {
         Projection laptop's VideoPsalm
       </label>
       <form onSubmit={test} className="space-y-2">
-        <Field label="Projection laptop address" hint="Shown in the receiver's window, e.g. 192.168.1.128:8765.">
+        <Field label="Projection laptop address" hint="Shown in the Companion's panel, e.g. 192.168.1.128:8765.">
           <input value={address} onChange={e => setAddress(e.target.value)} spellCheck={false}
             placeholder="192.168.1.128:8765" className={`${INPUT} font-mono text-[12px]`} />
         </Field>
-        <Field label="Receiver key" hint={status || "Also shown in the receiver's window."}>
+        <Field label="Receiver key" hint={status || "Also shown in the Companion's panel."}>
           <div className="flex gap-2">
             <input value={key} onChange={e => setKey(e.target.value)} spellCheck={false}
               className={`${INPUT} flex-1 font-mono text-[12px]`} />

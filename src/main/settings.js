@@ -22,8 +22,8 @@ const DEFAULTS = {
   confidenceFilter: 'all',   // 'all' | 'medium' | 'high'
   sendToLocal: true,         // send verses to this laptop's VideoPsalm
   sendToProjection: true,    // ...and to the projection laptop's, when its address is set
-  projectionAddress: '',     // e.g. 192.168.1.128:8765 (python/vp_receiver.py)
-  projectionKey: '',         // the key the receiver shows
+  projectionAddress: '',     // e.g. 192.168.1.128:8765 (Scripture Panel Companion)
+  projectionKey: '',         // the key the Companion shows
   miniPanel: true,           // the small panel docked to VideoPsalm
   miniCollapsed: false,
   miniOffset: { x: 8, y: 165, w: 360, h: 250 },   // from VideoPsalm's top-left corner, in DIPs
