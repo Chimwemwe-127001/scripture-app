@@ -13,6 +13,7 @@
  */
 
 const log = require('./logger')
+const { netFetch } = require('./netRoute')
 
 const SYSTEM_PROMPT =
   'You are a Bible reference assistant for a church media operator. ' +
@@ -57,8 +58,8 @@ class LlmClient {
   async _getModelId() {
     if (this._modelId) return this._modelId
     try {
-      const res = await fetch(`${this.endpoint}/models`, {
-        signal: AbortSignal.timeout(4000),
+      const res = await netFetch(`${this.endpoint}/models`, {
+        timeoutMs: 4000,
       })
       if (!res.ok) return null
       const json = await res.json()
@@ -78,8 +79,8 @@ class LlmClient {
    */
   async checkStatus() {
     try {
-      const res = await fetch(`${this.endpoint}/models`, {
-        signal: AbortSignal.timeout(3000),
+      const res = await netFetch(`${this.endpoint}/models`, {
+        timeoutMs: 3000,
       })
       if (!res.ok) return { ok: false, model: null, error: `HTTP ${res.status}` }
       const json = await res.json()
@@ -140,7 +141,7 @@ class LlmClient {
 
       let res
       try {
-        res = await fetch(`${this.endpoint}/chat/completions`, {
+        res = await netFetch(`${this.endpoint}/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -152,7 +153,7 @@ class LlmClient {
             max_tokens:  64,
             stream:      false,
           }),
-          signal: AbortSignal.timeout(25000),
+          timeoutMs: 25000,
         })
       } catch (err) {
         log.error('llm', 'Request failed', { attempt, error: err.message })
@@ -267,7 +268,7 @@ class LlmClient {
     const modelId = await this._getModelId()
     if (!modelId) return null   // LM Studio is optional; search alone still works
     try {
-      const res = await fetch(`${this.endpoint}/chat/completions`, {
+      const res = await netFetch(`${this.endpoint}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -279,7 +280,7 @@ class LlmClient {
           top_logprobs: 5,
           stream: false,
         }),
-        signal: AbortSignal.timeout(JUDGE_TIMEOUT_MS),
+        timeoutMs: JUDGE_TIMEOUT_MS,
       })
       if (!res.ok) {
         if (res.status === 400) this._modelId = null   // model switched in LM Studio

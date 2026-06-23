@@ -81,6 +81,9 @@ export default function Mini() {
         )}
       </header>
 
+      {s.remote?.connected && s.remote.reconnecting && (
+        <p className="px-3 py-1.5 border-b border-line text-[12px] text-warn">Reconnecting to the Scripture Panel…</p>
+      )}
       {s.remote && !s.remote.connected && (
         <div className="px-3 py-3 border-b border-line text-[12px] space-y-1.5">
           <p className="text-fg">Waiting for the Scripture Panel on laptop 1.</p>

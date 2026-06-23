@@ -13,6 +13,7 @@ const settings       = require('./settings')
 const miniPanel      = require('./miniPanel')
 const hotkeys        = require('./hotkeys')
 const projectionLink = require('./projectionLink')
+const { netFetch }   = require('./netRoute')
 const log            = require('./logger')
 
 let mainWindow = null
@@ -623,11 +624,11 @@ ipcMain.handle('stop-listening', async () => {
 /** The projection laptop's Companion, or an error result if it does not answer. */
 async function callProjection(params) {
   try {
-    const res = await fetch(projectionLink.projectionUrl('/command'), {
+    const res = await netFetch(projectionLink.projectionUrl('/command'), {
       method: 'POST',
       headers: projectionLink.headers(),
       body: JSON.stringify(params),
-      signal: AbortSignal.timeout(VP_TIMEOUT_MS),
+      timeoutMs: VP_TIMEOUT_MS,
     })
     return await res.json()
   } catch (err) {

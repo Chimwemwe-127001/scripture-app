@@ -9,6 +9,7 @@
  */
 
 const settings = require('./settings')
+const { netFetch } = require('./netRoute')
 const log = require('./logger')
 
 const REPEAT_MS = 4000
@@ -36,8 +37,8 @@ async function postState() {
   if (posting) { again = true; return }
   posting = true
   try {
-    await fetch(url, {
-      method: 'POST', headers: headers(), body: JSON.stringify(lastState), signal: AbortSignal.timeout(3000),
+    await netFetch(url, {
+      method: 'POST', headers: headers(), body: JSON.stringify(lastState), timeoutMs: 3000,
     })
   } catch { /* the laptop is away; the repeat below tries again */ }
   posting = false
@@ -55,7 +56,7 @@ async function pollActions(onAction) {
     let wait = RETRY_MS
     if (url) {
       try {
-        const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(POLL_TIMEOUT_MS) })
+        const res = await netFetch(url, { headers: headers(), timeoutMs: POLL_TIMEOUT_MS })
         if (res.ok) {
           const { actions } = await res.json()
           for (const action of actions || []) {
