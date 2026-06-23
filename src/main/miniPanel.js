@@ -24,13 +24,19 @@ const settings = require('./settings')
 const log = require('./logger')
 
 const COLLAPSED_H = 40   // just the title strip
+// On Windows, Electron only makes a window truly topmost for levels above
+// 'floating'; with 'floating' (or none) the panel slipped behind VideoPsalm
+// whenever VideoPsalm was clicked.
+const ON_TOP = 'pop-up-menu'
 
 let win = null
 let watch = null
 let vp = null            // last report from the watcher
 let lastHost = null      // where the panel was last docked, kept while it has focus
+let shownOn = null       // the host the panel was last shown over, null while hidden
 let placing = false      // true while we move the panel ourselves
-let dragging = false     // true while the operator drags or resizes it
+let dragging = 0         // when the operator started dragging or resizing it, 0 when not
+const DRAG_GIVE_UP_MS = 15000   // a drag whose end Windows never reported
 let opts = null          // { preload, rendererUrl, rendererFile, watchCommand, onAction, openMain, hash }
 
 function init(options) {
@@ -79,7 +85,7 @@ function createWindow() {
     backgroundColor: '#141518',
     webPreferences: { preload: opts.preload, sandbox: false, contextIsolation: true },
   })
-  win.setAlwaysOnTop(true, 'floating')
+  win.setAlwaysOnTop(true, ON_TOP)
 
   const hash = opts.hash || 'mini'
   if (opts.rendererUrl) win.loadURL(`${opts.rendererUrl}#${hash}`)
@@ -88,8 +94,11 @@ function createWindow() {
   // Only the operator's own drags count. Electron also reports "moved" when
   // it first shows the window, and DPI rounding can change the size by a
   // pixel, neither of which should be saved.
-  win.on('will-move', () => { dragging = true })
-  win.on('will-resize', () => { dragging = true })
+  // While the operator drags, the watcher keeps reporting the host window and
+  // place() would pull the panel back to its old spot under the mouse, so
+  // place() leaves it alone until the drag ends.
+  win.on('will-move', () => { if (!placing) dragging = Date.now() })
+  win.on('will-resize', () => { if (!placing) dragging = Date.now() })
   win.on('moved', saveOffset)
   win.on('resized', saveOffset)
   // Moving between the panel and the full window does not change which
@@ -148,9 +157,15 @@ function place() {
   if (!win || win.isDestroyed()) return
   const host = currentHost()
   if (!host) {
+    shownOn = null
     if (win.isVisible()) win.hide()
     return
   }
+  if (dragging && Date.now() - dragging < DRAG_GIVE_UP_MS) {
+    if (!win.isVisible()) win.showInactive()
+    return
+  }
+  dragging = 0
   if (host.key !== lastHost?.key) log.info('mini', 'Panel docked', { on: host.key === 'obs' ? 'OBS' : 'VideoPsalm' })
   lastHost = host
 
@@ -169,25 +184,38 @@ function place() {
     win.setBounds(want)
     setTimeout(() => { placing = false }, 250)
   }
-  if (!win.isVisible()) win.showInactive()
+  if (!win.isVisible() || host.key !== shownOn) {
+    win.showInactive()
+    win.setAlwaysOnTop(true, ON_TOP)
+    win.moveTop()
+    shownOn = host.key
+  }
 }
 
 /** The operator dragged or resized the panel: remember where, relative to its host. */
 function saveOffset() {
   if (!dragging || placing || !win || !lastHost) return
-  dragging = false
+  dragging = 0
   const key = OFFSET_KEY[lastHost.key]
-  const r = lastHost.rect
+  // The host may have moved since it was last reported.
+  const host = currentHost()
+  const r = (host?.key === lastHost.key ? host : lastHost).rect
   const b = win.getBounds()
   const s = settings.load()
+  // Saved as it will be shown: kept inside the host window, so the panel
+  // does not jump when it is next placed.
+  const h = s.miniCollapsed ? COLLAPSED_H : b.height
+  const x = Math.min(Math.max(b.x, r.x), r.x + r.width - b.width)
+  const y = Math.min(Math.max(b.y, r.y), r.y + r.height - h)
   settings.save({
     [key]: {
-      x: b.x - r.x,
-      y: b.y - r.y,
+      x: Math.round(x - r.x),
+      y: Math.round(y - r.y),
       w: b.width,
       h: s.miniCollapsed ? s[key].h : b.height,
     },
   })
+  place()
 }
 
 /** Fold the panel to its title strip, or open it again. */
