@@ -39,19 +39,19 @@ Your choices are saved, so next week you can usually go straight to step 5.
 
 **Is LM Studio needed?** No. Without it the app still catches every verse that is named out loud ("Romans 8:28"). With it, the app also catches verses that are quoted or paraphrased without being named.
 
-### Two screens: the stream and the projector
+### Two laptops: the stream and the projector
 
-When the stream laptop and the projection laptop each run VideoPsalm, one Scripture Panel can put a verse on both with one keypress. The panel runs on the stream laptop (it has the graphics card and the microphone feed); the projection laptop runs a small receiver.
+When each laptop runs VideoPsalm, one Scripture Panel can put a verse on both with one keypress, and both laptops show the same mini panel. The full Scripture Panel runs on laptop 1 (it does the listening and detection). Laptop 2 runs **Scripture Panel Companion**, which needs no Python and no graphics card.
 
-Once, on the projection laptop:
+Once, on laptop 2:
 
-1. Copy `Scripture Panel Receiver.exe` to it (any folder, for example the Desktop). Nothing else needs installing.
-2. Open it. Windows Firewall asks once: allow it on **Private** networks. Set that laptop's network to Private if it is not.
-3. Its window shows two things to copy: the **Projection laptop address** (for example `192.168.1.128:8765`) and the **Receiver key**.
+1. Run `Scripture Panel Companion Setup.exe`. It installs for that user and adds a desktop shortcut.
+2. Open it, then bring VideoPsalm to the front. Windows Firewall asks once: allow it on **Private** networks, and set that laptop's network to Private if it is not.
+3. The mini panel over VideoPsalm shows **Waiting for the Scripture Panel**, with an address (for example `192.168.1.128:8765`) and a key.
 
-Once, on the stream laptop: in Scripture Panel, open Settings (`Ctrl+,`), go to **VideoPsalm**, enter the address and key, and press **Save and test**. It should say "Connected". A **Projector** light then shows in the top bar.
+Once, on laptop 1: in Scripture Panel, open Settings (`Ctrl+,`), go to **VideoPsalm**, enter the address and key, and press **Save and test**. It should say "Connected". A **Projector** light then shows in the top bar, and laptop 2's panel fills with the same cards.
 
-Each service: open VideoPsalm and the receiver on the projection laptop and leave the receiver's window open. Sending, switching Bible (`T`), hiding the text (`Ctrl+Alt+0`) and blanking (`Ctrl+Alt+B`) then act on both screens. Untick either screen in Settings to send to the other only. If one laptop does not answer, the other still updates and the status bar names the one that failed.
+Each service: open VideoPsalm and the Companion on laptop 2. Both panels stay in step, and either one works: a card, a number key, `T`, the microphone button and the `Ctrl+Alt` keys on laptop 2 all act through laptop 1, and the verse goes to both screens. Untick either screen in Settings to send to the other only. If one laptop does not answer, the other still updates and the status bar names the one that failed. If laptop 1 goes away, laptop 2's panel returns to the waiting screen.
 
 ## During the service
 
